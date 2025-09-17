@@ -8,6 +8,9 @@ import uvicorn
 import sys
 import os
 from utils.ai_client import cost_monitor
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Add the Backend directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

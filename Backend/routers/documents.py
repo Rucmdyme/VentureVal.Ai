@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 import time
 import uuid
 from pathlib import Path
-from models.schemas import DocumentUploadRequest, FileType
+from models.schemas import DocumentUploadRequest
 from models.database import get_storage_bucket
 from datetime import timedelta
 
