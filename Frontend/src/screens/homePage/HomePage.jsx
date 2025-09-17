@@ -9,9 +9,6 @@ import {
 } from "@mui/material";
 import logo from "../../assets/logo.jpg";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import { ref, uploadBytes } from "firebase/storage";
-import { v4 as uuidv4 } from "uuid";
-import { storage } from "../../firebase/firebaseconfig";
 import WeightsSection from "../../components/weightSection/weightsSection";
 import FileUpload from "../../components/fileUpload";
 import { materialTypes, whatYouWllGet } from "./constants";
@@ -46,23 +43,21 @@ function HomePage() {
       return;
     }
     setUploading(true);
-    const uniqueId = uuidv4();
-    const uploadPromises = Object.entries(selectedFiles).map(([key, file]) => {
-      if (file?.length) {
-        const fileData = file[0];
-        const fileRef = ref(
-          storage,
-          `Deal Material/${uniqueId}/${key}-${fileData.name}`
-        );
-        return uploadBytes(fileRef, fileData);
-      }
-      return null;
-    });
+    // const uniqueId = uuidv4();
+    // const uploadPromises = Object.entries(selectedFiles).map(([key, file]) => {
+    //   if (file?.length) {
+    //     const fileData = file[0];
+    //     const fileRef = ref(
+    //       storage,
+    //       `Deal Material/${uniqueId}/${key}-${fileData.name}`
+    //     );
+    //     return uploadBytes(fileRef, fileData);
+    //   }
+    //   return null;
+    // });
 
-    const results = await Promise.all(uploadPromises.filter(Boolean));
     setUploading(false);
     setShowAnalyzing(true);
-    console.log("All uploads done:", results);
   };
 
   if (showAnalyzing) {
