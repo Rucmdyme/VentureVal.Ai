@@ -21,7 +21,7 @@ ALLOWED_MIME_TYPES = {
     'image/png'
 }
 
-ALLOWED_EXTENSIONS = {'.pdf', '.doc', '.docx', '.txt', '.jpg', '.jpeg', '.png'}
+ALLOWED_EXTENSIONS = {'.pdf', '.docx', '.txt', '.jpg', '.jpeg', '.png'}
 
 from datetime import timedelta
 
@@ -30,7 +30,7 @@ async def generate_upload_url(request: DocumentUploadRequest):
     """
     Generate a V4 signed URL for uploading a file directly to Firebase Storage.
     Supports file types: pitch_deck, call_transcript, founder_update, email_communication
-    Supports extensions: .pdf, .doc, .docx, .txt, .jpg, .jpeg, .png (Max 1 file)
+    Supports extensions: .pdf, .docx, .txt, .jpg, .jpeg, .png (Max 1 file)
     """
     try:
         # Step 1: Validate the file metadata from the request
@@ -38,14 +38,14 @@ async def generate_upload_url(request: DocumentUploadRequest):
         if request.content_type not in ALLOWED_MIME_TYPES:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Invalid file type: {request.content_type}. Supported types: .pdf, .doc, .docx, .txt, .jpg, .jpeg, .png"
+                detail=f"Invalid file type: {request.content_type}. Supported types: .pdf, .docx, .txt, .jpg, .jpeg, .png"
             )
         
         # Validate file extension
         if file_extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Invalid file extension: {file_extension}. Supported extensions: .pdf, .doc, .docx, .txt, .jpg, .jpeg, .png"
+                detail=f"Invalid file extension: {file_extension}. Supported extensions: .pdf, .docx, .txt, .jpg, .jpeg, .png"
             )
 
         # Step 2: Generate a unique path in Firebase Storage

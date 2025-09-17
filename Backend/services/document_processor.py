@@ -1,27 +1,30 @@
 # services/document_processor.py
 import asyncio
-import tempfile
 import aiohttp
 import os
-from typing import List, Dict
+from typing import List, Dict, Any
 import google.generativeai as genai
-from PyPDF2 import PdfReader
 from PIL import Image
-from pptx import Presentation
 import json
 import logging
 from datetime import timedelta
 from io import BytesIO
 from utils.ai_client import configure_gemini
 from models.database import get_storage_bucket
+import re
+from urllib.parse import urlparse
+import fitz
+from docx import Document
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
 class DocumentProcessor:
+    """
+        A comprehensive document processor that handles text, images, PDFs, and DOCX files
+        with multi-modal analysis capabilities using the Gemini API.
+        """
     def __init__(self):
-        """Initialize the document processor with Gemini multimodal support"""
-        
-        # Initialize Gemini API
         self.gemini_available = configure_gemini()
         if self.gemini_available:
             self.model = genai.GenerativeModel('gemini-1.5-pro')
@@ -31,10 +34,10 @@ class DocumentProcessor:
             self.model = None
         
         # File type classifications
-        self.image_formats = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp', '.gif'}
-        self.office_formats = {'.pptx', '.ppt', '.docx', '.doc'}
+        self.image_formats = {'.jpg', '.jpeg', '.png'}
+        self.office_formats = {'.docx'}
         self.pdf_formats = {'.pdf'}
-        self.text_formats = {'.txt', '.md', '.json', '.csv', '.xml', '.html'}
+        self.text_formats = {'.txt'}
 
     async def generate_download_urls(self, storage_paths: List[str]) -> Dict[str, str]:
         """Convert storage paths to download URLs"""
@@ -140,42 +143,29 @@ class DocumentProcessor:
             }
 
     async def process_single_document(self, file_url: str) -> Dict:
-        """Enhanced document processing with Gemini multimodal support"""
-        
+        """Downloads and processes a single document based on its file type."""
+        if not self.gemini_available:
+            return {'error': 'Gemini model is not available.'}
         try:
-            # Download file
             file_content = await self.download_file(file_url)
             file_extension = self._get_file_extension(file_url)
             
             logger.info(f"Processing {file_url} with extension {file_extension}")
-            
-            if not self.gemini_available:
-                return await self._fallback_processing(file_content, file_url, file_extension)
-            
-            # Route to appropriate Gemini processor based on file type
+
             if file_extension in self.image_formats:
                 return await self._process_image_with_gemini(file_content, file_url)
-            
             elif file_extension in self.pdf_formats:
                 return await self._process_pdf_enhanced(file_content, file_url)
-            
             elif file_extension in self.office_formats:
                 return await self._process_office_document(file_content, file_url, file_extension)
-            
             elif file_extension in self.text_formats:
                 return await self._process_text_with_gemini(file_content.decode('utf-8'), file_url)
-            
             else:
-                # Try intelligent fallback for unknown file types
-                return await self._process_unknown_file(file_content, file_url)
-        
+                return {'error': f'Unsupported file type: {file_extension}', 'file_url': file_url}
+
         except Exception as e:
-            logger.error(f"Error processing document {file_url}: {e}")
-            return {
-                'error': f'Document processing failed: {str(e)}',
-                'text': '',
-                'file_url': file_url
-            }
+            logger.error(f"Failed to process document {file_url}: {e}")
+            return {'error': f'Critical processing failure: {str(e)}', 'file_url': file_url}
 
     async def _process_image_with_gemini(self, file_content: bytes, file_url: str) -> Dict:
         """Process images using Gemini Vision"""
@@ -252,114 +242,47 @@ class DocumentProcessor:
             }
 
     async def _process_pdf_enhanced(self, file_content: bytes, file_url: str) -> Dict:
-        """Enhanced PDF processing with fallback to Gemini for image-based PDFs"""
+        """Orchestrates multi-modal analysis for a PDF document."""
+        text, images = await self._extract_pdf_text_and_images(file_content)
+        if not text.strip() and not images:
+            return {'error': 'PDF is empty or could not be parsed', 'file_url': file_url}
+
+        tasks = []
+        if text.strip():
+            tasks.append(self._process_text_with_gemini(text, file_url, "Extracted from PDF."))
+        for i, img in enumerate(images):
+            tasks.append(self._process_image_with_gemini(img, f"{file_url}#image_{i+1}"))
         
-        try:
-            # First attempt: Extract text normally
-            text_content, page_count = await self._extract_pdf_text(file_content)
-            
-            if text_content.strip():
-                # Process extracted text with Gemini
-                return await self._process_text_with_gemini(
-                    text_content, 
-                    file_url, 
-                    extra_context=f"This is a PDF document with {page_count} pages"
-                )
-            
-            # If no text found, try to process first few pages as images with Gemini
-            logger.info(f"No text found in PDF {file_url}, attempting image-based processing...")
-            return await self._process_pdf_as_images(file_content, file_url)
-            
-        except Exception as e:
-            logger.error(f"PDF processing error for {file_url}: {e}")
-            return {
-                'error': f'PDF processing failed: {str(e)}',
-                'file_url': file_url,
-                'file_type': 'pdf'
-            }
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Combine results into a single object for this document
+        return self._combine_multimodal_results(results, file_url, 'pdf', len(text), len(images))
 
     async def _process_office_document(self, file_content: bytes, file_url: str, file_extension: str) -> Dict:
-        """Process PowerPoint and Word documents"""
+        """Orchestrates analysis for Office documents, primarily DOCX."""
+        text, images = await self._extract_docx_text_and_images(file_content)
+        if not text.strip() and not images:
+            return {'error': 'DOCX file is empty or could not be parsed', 'file_url': file_url}
         
-        try:
-            if file_extension in {'.pptx', '.ppt'}:
-                return await self._process_powerpoint(file_content, file_url)
-            elif file_extension in {'.docx', '.doc'}:
-                # For now, return error for Word docs (would need python-docx)
-                return {
-                    'error': 'Word document processing not yet implemented',
-                    'suggestion': 'Please convert to PDF or text format',
-                    'file_url': file_url,
-                    'file_type': 'word_document'
-                }
-            else:
-                return {
-                    'error': f'Unsupported office format: {file_extension}',
-                    'file_url': file_url
-                }
-                
-        except Exception as e:
-            logger.error(f"Office document processing error for {file_url}: {e}")
-            return {
-                'error': f'Office document processing failed: {str(e)}',
-                'file_url': file_url
-            }
+        tasks = []
+        if text.strip():
+            tasks.append(self._process_text_with_gemini(text, file_url, "Extracted from DOCX."))
+        for i, img in enumerate(images):
+            tasks.append(self._process_image_with_gemini(img, f"{file_url}#image_{i+1}"))
 
-    async def _process_powerpoint(self, file_content: bytes, file_url: str) -> Dict:
-        """Process PowerPoint presentations"""
-        
-        try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pptx') as tmp_file:
-                tmp_file.write(file_content)
-                tmp_file.flush()
-                
-                # Extract text from slides
-                presentation = Presentation(tmp_file.name)
-                slide_contents = []
-                
-                for slide_num, slide in enumerate(presentation.slides):
-                    slide_texts = []
-                    
-                    for shape in slide.shapes:
-                        if hasattr(shape, 'text') and shape.text.strip():
-                            slide_texts.append(shape.text.strip())
-                    
-                    if slide_texts:
-                        slide_content = f"=== Slide {slide_num + 1} ===\n" + "\n".join(slide_texts)
-                        slide_contents.append(slide_content)
-                
-                os.unlink(tmp_file.name)
-                
-                if slide_contents:
-                    full_presentation_text = "\n\n".join(slide_contents)
-                    return await self._process_text_with_gemini(
-                        full_presentation_text,
-                        file_url,
-                        extra_context=f"This is a PowerPoint presentation with {len(slide_contents)} slides"
-                    )
-                else:
-                    return {
-                        'error': 'No text content found in PowerPoint slides',
-                        'file_url': file_url,
-                        'file_type': 'powerpoint'
-                    }
-                    
-        except Exception as e:
-            logger.error(f"PowerPoint processing error: {e}")
-            return {
-                'error': f'PowerPoint processing failed: {str(e)}',
-                'file_url': file_url,
-                'file_type': 'powerpoint'
-            }
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return self._combine_multimodal_results(results, file_url, 'docx', len(text), len(images))
 
     async def _process_text_with_gemini(self, text_content: str, file_url: str, extra_context: str = "") -> Dict:
         """Process text content with Gemini for enhanced structured extraction"""
         
         if not text_content.strip():
-            return {'error': 'Empty text content', 'text': '', 'file_url': file_url}
+            return {'error': 'Empty text content', 'file_url': file_url}
         
         try:
-            return await self.extract_structured_data(text_content, 'business_document', extra_context)
+            structured_data = await self.extract_structured_data(text_content, 'business_document', extra_context)
+            structured_data['file_url'] = file_url # Ensure URL is in final output
+            return structured_data
         except Exception as e:
             return {
                 'error': f'Text processing failed: {str(e)}',
@@ -367,189 +290,10 @@ class DocumentProcessor:
                 'file_url': file_url
             }
 
-    async def _process_unknown_file(self, file_content: bytes, file_url: str) -> Dict:
-        """Intelligent fallback processing for unknown file types"""
-        
-        # Try as image first (Gemini can handle many image formats)
-        try:
-            return await self._process_image_with_gemini(file_content, file_url)
-        except Exception:
-            pass
-        
-        # Try as text
-        try:
-            text_content = file_content.decode('utf-8')
-            return await self._process_text_with_gemini(text_content, file_url)
-        except UnicodeDecodeError:
-            pass
-        
-        # Try as PDF
-        try:
-            return await self._process_pdf_enhanced(file_content, file_url)
-        except Exception:
-            pass
-        
-        return {
-            'error': 'Unable to process file with any available method',
-            'file_url': file_url,
-            'file_type': 'unknown'
-        }
-
-    async def _extract_pdf_text(self, file_content: bytes) -> tuple[str, int]:
-        """Extract text from PDF and return text + page count"""
-        
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-            tmp_file.write(file_content)
-            tmp_file.flush()
-            
-            try:
-                reader = PdfReader(tmp_file.name)
-                text_parts = []
-                page_count = len(reader.pages)
-                
-                for page_num, page in enumerate(reader.pages):
-                    try:
-                        page_text = page.extract_text()
-                        if page_text.strip():
-                            text_parts.append(f"--- Page {page_num + 1} ---\n{page_text}")
-                    except Exception as e:
-                        logger.warning(f"Error extracting text from page {page_num + 1}: {e}")
-                
-                full_text = "\n\n".join(text_parts)
-                
-            finally:
-                os.unlink(tmp_file.name)
-            
-            return full_text, page_count
-
-    async def _process_pdf_as_images(self, file_content: bytes, file_url: str) -> Dict:
-        """Process image-based PDF by converting pages to images (requires additional setup)"""
-        
-        # For now, return a helpful error message
-        # To implement this, you'd need pdf2image: pip install pdf2image
-        # and system dependencies: apt-get install poppler-utils
-        
-        return {
-            'error': 'PDF appears to contain only images. Image-based PDF processing not yet implemented.',
-            'suggestion': 'Consider using OCR software to convert to searchable PDF, or extract images manually.',
-            'file_url': file_url,
-            'file_type': 'image_based_pdf'
-        }
-
-    async def _fallback_processing(self, file_content: bytes, file_url: str, file_extension: str) -> Dict:
-        """Basic fallback when Gemini is not available"""
-        
-        if file_extension in self.text_formats:
-            try:
-                text_content = file_content.decode('utf-8')
-                return {
-                    'company_name': "",
-                    'sector': "",
-                    'stage': "",
-                    'revenue': None,
-                    'growth_rate': None,
-                    'team_size': None,
-                    'funding_raised': None,
-                    'funding_seeking': None,
-                    'market_size': None,
-                    'problem': "",
-                    'solution': "",
-                    'business_model': "",
-                    'traction_metrics': [],
-                    'founders': [],
-                    'competitors': [],
-                    'key_partnerships': [],
-                    'confidence_score': 0.1,
-                    'raw_text': text_content,
-                    'extraction_method': 'fallback_text_only',
-                    'file_url': file_url,
-                    'note': 'Basic text extraction - Gemini not available for structured analysis'
-                }
-            except UnicodeDecodeError:
-                return {'error': 'Cannot decode text file without Gemini', 'file_url': file_url}
-        
-        elif file_extension in self.pdf_formats:
-            try:
-                text_content, _ = await self._extract_pdf_text(file_content)
-                if text_content:
-                    return {
-                        'raw_text': text_content,
-                        'extraction_method': 'basic_pdf_text',
-                        'file_url': file_url,
-                        'note': 'Basic PDF text extraction - Gemini not available for structured analysis'
-                    }
-            except Exception:
-                pass
-        
-        return {
-            'error': 'Gemini not available and file type requires AI processing',
-            'file_url': file_url,
-            'suggestion': 'Configure Gemini API for advanced document processing'
-        }
-
-    def _parse_gemini_json_response(self, response_text: str) -> Dict:
-        """Parse JSON from Gemini response with error handling"""
-        try:
-            # Find JSON in response
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
-            
-            if json_start != -1 and json_end > json_start:
-                json_str = response_text[json_start:json_end]
-                parsed_data = json.loads(json_str)
-                
-                # Ensure required fields exist with defaults
-                default_structure = {
-                    'company_name': '',
-                    'sector': '',
-                    'stage': '',
-                    'revenue': None,
-                    'growth_rate': None,
-                    'team_size': None,
-                    'funding_raised': None,
-                    'funding_seeking': None,
-                    'market_size': None,
-                    'problem': '',
-                    'solution': '',
-                    'business_model': '',
-                    'traction_metrics': [],
-                    'founders': [],
-                    'competitors': [],
-                    'key_partnerships': [],
-                    'confidence_score': 0.5
-                }
-                
-                # Merge with defaults
-                for key, default_value in default_structure.items():
-                    if key not in parsed_data:
-                        parsed_data[key] = default_value
-                
-                return parsed_data
-            else:
-                return {
-                    'error': 'Could not parse structured data from response',
-                    'raw_response': response_text[:500] + "..." if len(response_text) > 500 else response_text
-                }
-                
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing error: {e}")
-            return {
-                'error': f'JSON parsing failed: {str(e)}',
-                'raw_response': response_text[:500] + "..." if len(response_text) > 500 else response_text
-            }
-
     def _get_file_extension(self, file_url: str) -> str:
         """Extract file extension from URL"""
-        return os.path.splitext(file_url.lower())[1]
-
-    # Legacy methods - maintaining backward compatibility
-    async def process_pdf(self, file_content: bytes) -> Dict:
-        """Legacy method - redirects to enhanced processing"""
-        return await self._process_pdf_enhanced(file_content, "legacy_pdf_call")
-
-    async def process_text(self, text_content: str) -> Dict:
-        """Legacy method - redirects to enhanced processing"""
-        return await self._process_text_with_gemini(text_content, "legacy_text_call")
+        path = urlparse(file_url).path
+        return os.path.splitext(path.lower())[-1]
 
     async def extract_structured_data(self, text: str, doc_type: str, extra_context: str = "") -> Dict:
         """Enhanced structured data extraction using Gemini"""
@@ -767,4 +511,102 @@ class DocumentProcessor:
                 'error': f'Document synthesis failed: {str(e)}',
                 'individual_results': all_data,
                 'document_errors': doc_errors
+            }
+
+    async def _extract_pdf_text_and_images(self, file_content: bytes) -> tuple[str, list[bytes]]:
+        """Extracts both text and images from a PDF, returning (full_text, list_of_image_bytes)."""
+        text_parts, image_bytes_list = [], []
+        try:
+            doc = fitz.open(stream=file_content, filetype="pdf")
+            for page_num, page in enumerate(doc):
+                text_parts.append(f"--- Page {page_num + 1} ---\n{page.get_text()}")
+                for img in page.get_images(full=True):
+                    xref = img[0]
+                    base_image = doc.extract_image(xref)
+                    image_bytes_list.append(base_image["image"])
+            return "\n\n".join(text_parts), image_bytes_list
+        except Exception as e:
+            logger.error(f"Error processing PDF with PyMuPDF: {e}")
+            return "", []
+
+    async def _extract_docx_text_and_images(self, file_content: bytes) -> tuple[str, list[bytes]]:
+        """Extracts both text and images from a DOCX, returning (text, list_of_image_bytes)."""
+        try:
+            doc_stream = BytesIO(file_content)
+            doc = Document(doc_stream)
+            text_content = "\n".join([para.text for para in doc.paragraphs])
+            image_bytes_list = [rel.target_part.blob for rel in doc.part.rels.values() if "image" in rel.target_ref]
+            return text_content, image_bytes_list
+        except Exception as e:
+            logger.error(f"Failed to extract content from DOCX: {e}")
+            return "", []
+
+    def _combine_multimodal_results(self, results: List[Any], url: str, ftype: str, tlen: int, ilen: int) -> Dict:
+        """Helper to combine text and image analysis results for a single document."""
+        text_analysis, image_analyses, errors = {}, [], []
+        for res in results:
+            if isinstance(res, Exception):
+                errors.append(str(res))
+            elif 'error' in res:
+                errors.append(res['error'])
+            elif res.get('extraction_method') == 'gemini_vision':
+                image_analyses.append(res)
+            else:
+                text_analysis = res
+        
+        return {
+            'file_url': url,
+            'file_type': ftype,
+            'extraction_method': 'multi-modal_enhanced',
+            'text_based_analysis': text_analysis,
+            'image_based_analyses': image_analyses,
+            'processing_errors': errors,
+            'summary': f'Extracted {tlen} text chars and {ilen} images.'
+        }
+
+    def _parse_gemini_json_response(self, response_text: str) -> Dict:
+        """
+        Parses JSON from a Gemini response using a robust regex method,
+        handles errors gracefully, and enforces a consistent output schema.
+        """
+        try:
+            # 1. Use the robust regex from Function 2 to find the JSON string
+            # json_match = re.search(r'```json\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+            json_match = re.search(r'```json\s*(\{([^\}]*)\})\s*```', response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # Fallback for responses that aren't in a markdown block
+                json_start = response_text.find('{')
+                json_end = response_text.rfind('}') + 1
+                if json_start == -1 or json_end == 0:
+                    raise ValueError("No valid JSON object found in the response.")
+                json_str = response_text[json_start:json_end]
+
+            # 2. Parse the extracted string
+            parsed_data = json.loads(json_str)
+
+            # 3. Enforce the schema with defaults, like in Function 1
+            default_structure = {
+                'company_name': '', 'sector': '', 'stage': '', 'revenue': None,
+                'growth_rate': None, 'team_size': None, 'funding_raised': None,
+                'funding_seeking': None, 'market_size': None, 'problem': '',
+                'solution': '', 'business_model': '', 'traction_metrics': [],
+                'founders': [], 'competitors': [], 'key_partnerships': [],
+                'confidence_score': 0.5
+            }
+            
+            # Merge parsed data into the default structure
+            # This ensures all keys exist in the final output
+            final_data = default_structure.copy()
+            final_data.update(parsed_data)
+            
+            return final_data
+
+        except (json.JSONDecodeError, ValueError) as e:
+            # 4. Catch errors and return a structured error response, like in Function 1
+            logger.error(f"Failed to parse Gemini response: {e}")
+            return {
+                'error': f'Could not parse structured data from response: {str(e)}',
+                'raw_response': response_text[:500] + "..." if len(response_text) > 500 else response_text
             }
