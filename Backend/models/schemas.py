@@ -3,6 +3,7 @@
 # models/schemas.py
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from enum import Enum
 
 class WeightingConfig(BaseModel):
     profile_name: str = "custom"
@@ -40,6 +41,13 @@ class ChatResponse(BaseModel):
     analysis_id: str
 
 
+class FileType(str, Enum):
+    PITCH_DECK = "pitch_deck"
+    CALL_TRANSCRIPT = "call_transcript" 
+    FOUNDER_UPDATE = "founder_update"
+    EMAIL_COMMUNICATION = "email_communication"
+
 class DocumentUploadRequest(BaseModel):
     filename: str
     content_type: str
+    file_type: FileType = Field(..., description="Type of document being uploaded")

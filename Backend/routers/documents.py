@@ -2,12 +2,12 @@
 
 # routers/documents.py
 from fastapi import APIRouter, HTTPException
-from firebase_admin import storage
 import time
 import uuid
 from pathlib import Path
-from models.schemas import DocumentUploadRequest
+from models.schemas import DocumentUploadRequest, FileType
 from models.database import get_storage_bucket
+from datetime import timedelta
 
 router = APIRouter()
 
@@ -16,33 +16,43 @@ ALLOWED_MIME_TYPES = {
     'text/plain',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/csv',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    'image/jpeg',
+    'image/jpg',
+    'image/png'
 }
 
-ALLOWED_EXTENSIONS = {'.pdf', '.txt', '.doc', '.docx', '.csv', '.xls', '.xlsx'}
+ALLOWED_EXTENSIONS = {'.pdf', '.doc', '.docx', '.txt', '.jpg', '.jpeg', '.png'}
 
 from datetime import timedelta
 
-# New endpoint to generate the signed URL
 @router.post("/generate-upload-url")
 async def generate_upload_url(request: DocumentUploadRequest):
     """
     Generate a V4 signed URL for uploading a file directly to Firebase Storage.
+    Supports file types: pitch_deck, call_transcript, founder_update, email_communication
+    Supports extensions: .pdf, .doc, .docx, .txt, .jpg, .jpeg, .png (Max 1 file)
     """
     try:
         # Step 1: Validate the file metadata from the request
         file_extension = Path(request.filename).suffix.lower()
         if request.content_type not in ALLOWED_MIME_TYPES:
-            raise HTTPException(status_code=400, detail=f"Invalid file type: {request.content_type}")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid file type: {request.content_type}. Supported types: .pdf, .doc, .docx, .txt, .jpg, .jpeg, .png"
+            )
+        
+        # Validate file extension
         if file_extension not in ALLOWED_EXTENSIONS:
-            raise HTTPException(status_code=400, detail=f"Invalid file extension: {file_extension}")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid file extension: {file_extension}. Supported extensions: .pdf, .doc, .docx, .txt, .jpg, .jpeg, .png"
+            )
 
         # Step 2: Generate a unique path in Firebase Storage
         unique_id = str(uuid.uuid4())
         timestamp = int(time.time())
-        storage_path = f"documents/{timestamp}_{unique_id}{file_extension}"
+        filename_without_ext = Path(request.filename).stem
+        storage_path = f"documents/{request.file_type.value}/{timestamp}_{filename_without_ext}_{unique_id}{file_extension}"
         
         # Step 3: Generate the V4 Signed URL
         bucket = get_storage_bucket()
@@ -61,6 +71,7 @@ async def generate_upload_url(request: DocumentUploadRequest):
             "signed_url": signed_url,
             "storage_path": storage_path,
             "upload_id": unique_id,
+            "file_type": request.file_type.value,
             "message": "Upload URL generated successfully. Use PUT to upload the file."
         }
 
