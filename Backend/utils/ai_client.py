@@ -1,0 +1,83 @@
+# Google AI clients
+
+# utils/ai_client.py
+import google.generativeai as genai
+import os
+from functools import wraps
+from datetime import datetime
+from fastapi import HTTPException
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Global clients
+cost_monitor = None
+_gemini_configured = False
+
+def configure_gemini():
+    """Centralized Gemini configuration"""
+    global _gemini_configured
+    
+    if _gemini_configured:
+        return True
+    
+    try:
+        key = os.getenv('GEMINI_API_KEY')
+        if not key:
+            logger.warning("No Gemini API key provided")
+            return False
+            
+        genai.configure(api_key=key)
+        _gemini_configured = True
+        logger.info("Gemini configured successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to configure Gemini: {e}")
+        return False
+
+def init_ai_clients():
+    """Initialize AI service clients"""
+    global cost_monitor
+    
+    # Configure Gemini
+    configure_gemini()
+    
+    # Initialize cost monitoring
+    cost_monitor = CostMonitor()
+    
+    print("AI clients initialized successfully")
+
+class CostMonitor:
+    def __init__(self):
+        self.daily_limits = {
+            'gemini_requests': 1000,    # Conservative limit
+            'document_processing': 100   # Per day limit
+        }
+        self.usage_tracking = {}
+    
+    def check_limits(self, service: str) -> bool:
+        today = datetime.now().date()
+        key = f"{service}_{today}"
+        
+        current_usage = self.usage_tracking.get(key, 0)
+        limit = self.daily_limits.get(service, 100)
+        
+        if current_usage >= limit:
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Daily limit reached for {service}. Try again tomorrow."
+            )
+        
+        self.usage_tracking[key] = current_usage + 1
+        return True
+
+def monitor_usage(service_name: str):
+    """Decorator to monitor API usage"""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            if cost_monitor:
+                cost_monitor.check_limits(service_name)
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
