@@ -1,13 +1,8 @@
-import { Typography, Container } from "@mui/material";
+import React from "react";
+import HomePage from "./screens/homePage/HomePage";
 
 function App() {
-  return (
-    <Container maxWidth="sm" sx={{ textAlign: "center", mt: 5 }}>
-      <Typography variant="h2" component="h1" gutterBottom>
-        ventireval.ai
-      </Typography>
-    </Container>
-  );
+  return <HomePage />;
 }
 
 export default App;
