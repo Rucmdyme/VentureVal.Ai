@@ -97,8 +97,8 @@ class DocumentProcessor:
         file_urls = list(download_urls.values())
         
         tasks = []
-        for url in file_urls:
-            task = asyncio.create_task(self.process_single_document(url))
+        for file_name, file_url in download_urls.items():
+            task = asyncio.create_task(self.process_single_document(file_name, file_url))
             tasks.append(task)
         
         try:
@@ -142,13 +142,14 @@ class DocumentProcessor:
                 'processing_errors': errors
             }
 
-    async def process_single_document(self, file_url: str) -> Dict:
-        """Downloads and processes a single document based on its file type."""
+    async def process_single_document(self, file_name: str,  file_url: str) -> Dict:
+        """Enhanced document processing with Gemini multimodal support"""
         if not self.gemini_available:
             return {'error': 'Gemini model is not available.'}
+
         try:
             file_content = await self.download_file(file_url)
-            file_extension = self._get_file_extension(file_url)
+            file_extension = self._get_file_extension(file_name)
             
             logger.info(f"Processing {file_url} with extension {file_extension}")
 
