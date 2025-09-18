@@ -4,7 +4,7 @@ import os
 from typing import Dict, List, Optional, Any
 import json
 import logging
-import google.generativeai as genai
+from google import genai
 from utils.ai_client import configure_gemini
 
 logger = logging.getLogger(__name__)
@@ -534,8 +534,13 @@ class RiskAnalyzer:
             Return only the JSON array, no other text.
             """
             
-            model = genai.GenerativeModel('gemini-1.5-pro')
-            response = await asyncio.to_thread(model.generate_content, prompt)
+            model = genai.Client(
+                vertexai=True,
+                project="ventureval-ef705",
+                location="us-central1"
+            )
+            
+            response = await asyncio.to_thread(model.models.generate_content, model="gemini-2.5-flash",contents = [prompt])
             
             if response and response.text:
                 # Extract JSON from response

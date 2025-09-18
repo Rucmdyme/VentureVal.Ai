@@ -3,7 +3,8 @@ import asyncio
 import aiohttp
 import os
 from typing import List, Dict, Any
-import google.generativeai as genai
+from google import genai
+from firebase_admin import storage
 from PIL import Image
 import json
 import logging
@@ -27,7 +28,11 @@ class DocumentProcessor:
     def __init__(self):
         self.gemini_available = configure_gemini()
         if self.gemini_available:
-            self.model = genai.GenerativeModel('gemini-1.5-pro')
+            self.model = genai.Client(
+                vertexai=True,
+                project="ventureval-ef705",
+                location="us-central1"
+            )
             logger.info("DocumentProcessor initialized with Gemini multimodal support")
         else:
             logger.warning("Gemini not available - using basic text processing only")
@@ -81,65 +86,149 @@ class DocumentProcessor:
             logger.error(f"Error downloading file {file_url}: {e}")
             raise
 
+    def get_file_uri(self, file_path: str) -> str:
+        bucket = storage.bucket()
+        blob = bucket.blob(file_path)
+        if not blob.exists():
+            raise FileNotFoundError(f"The file '{file_path}' does not exist in Firebase Storage.")
+        return f"gs://{blob.bucket.name}/{blob.name}"
+
+
+    def call_gemini_with_file(self, file_uris: list[str], prompt_text: str) -> str:
+        client = genai.Client(
+            vertexai=True,
+            project="ventureval-ef705",
+            location="us-central1"
+        )
+
+        # Build contents list: prompt first
+        contents = [prompt_text]
+
+        # Add each file with correct mime_type
+        for uri in file_uris:
+            ext = os.path.splitext(uri)[1].lower()
+            if ext in ['.pdf']:
+                mime_type = 'application/pdf'
+            elif ext in ['.doc', '.docx']:
+                mime_type = 'application/msword'
+            elif ext in ['.txt']:
+                mime_type = 'text/plain'
+            elif ext in ['.jpg', '.jpeg']:
+                mime_type = 'image/jpeg'
+            elif ext in ['.png']:
+                mime_type = 'image/png'
+            else:
+                raise ValueError(f"Unsupported file type: {ext}")
+
+            contents.append({
+                "uri": uri,
+                "mime_type": mime_type
+            })
+
+        # Send request
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=contents
+        )
+
+        return response.text
+    
+    # TODO: improve prompt and clean function
     async def process_documents_from_storage(self, storage_paths: List[str]) -> Dict:
         """Process documents from Firebase Storage paths"""
         
         if not storage_paths:
             return {'error': 'No storage paths provided'}
 
-        # Convert storage paths to download URLs
-        download_urls = await self.generate_download_urls(storage_paths)
+        file_uris = [self.get_file_uri(path) for path in storage_paths]
+        prompt = """
+            Extract structured business data from the attached PDF.
+            Output ONLY valid JSON following this schema exactly.
+            Do NOT explain your process or invent information.
+            Document could be:
+            - A presentation slide or pitch deck page
+            - A business chart, graph, or infographic
+            - A scanned business document
+            - A screenshot of financial data or metrics
+            - A company logo or branding material
 
-        if not download_urls:
-            return {'error': 'No valid files found at provided storage paths'}
-
-        # Extract just the URLs for processing
-        file_urls = list(download_urls.values())
-        
-        tasks = []
-        for file_name, file_url in download_urls.items():
-            task = asyncio.create_task(self.process_single_document(file_name, file_url))
-            tasks.append(task)
-        
-        try:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-        except Exception as e:
-            logger.error(f"Error processing documents: {e}")
-            return {'error': f'Document processing failed: {str(e)}'}
-        
-        # Filter successful results
-        processed_docs = []
-        errors = []
-        
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                errors.append({
-                    'file_url': file_urls[i],
-                    'error': str(result)
-                })
-            else:
-                processed_docs.append({
-                    'file_url': file_urls[i],
-                    'extracted_data': result
-                })
-        
-        if not processed_docs:
-            return {
-                'error': 'No documents were successfully processed',
-                'errors': errors
+            {
+            "synthesized_data": {
+                "company_name": "",
+                "sector": "",
+                "stage": "",
+                "geography": "",
+                "founded": "",
+                "description": "",
+                "financials": {
+                    "revenue": null,
+                    "growth_rate": null,
+                    "burn_rate": null,
+                    "funding_raised": null,
+                    "funding_seeking": null,
+                    "valuation": null,
+                    "runway_months": null
+                },
+                "market": {
+                    "size": null,
+                    "target_segment": "",
+                    "competitors": [],
+                    "growth_rate": null
+                },
+                "team": {
+                    "size": null,
+                    "founders": [],
+                    "key_personnel": []
+                },
+                "product": {
+                    "name": "",
+                    "description": "",
+                    "stage": "",
+                    "business_model": "",
+                    "competitive_advantage": ""
+                },
+                "traction": {
+                    "customers": null,
+                    "users": null,
+                    "partnerships": [],
+                    "key_metrics": []
+                }
+            },
+            "data_quality": {
+                "consistency_score": 0.0,
+                "completeness_score": 0.0,
+                "confidence_score": 0.0,
+                "inconsistencies": [],
+                "missing_critical_data": []
+            },
+            "source_summary": {
+                "documents_processed": 1,
+                "primary_sources": [],
+                "data_coverage": {}
             }
+            }
+            Synthesis rules:
+            1. Prioritize data appearing in multiple sources
+            2. Flag conflicts in inconsistencies array
+            3. Calculate scores based on data quality and consistency
+            4. Don't invent information - only use what's provided
+            5. Identify missing critical business data
+            """
+
+        # TODO: remove after debugging to fetch accurate data
+        await asyncio.sleep(5)
+        # gemini_response = self.call_gemini_with_file(file_uris, prompt)
+        gemini_response = '```json\n{\n  "synthesized_data": {\n    "company_name": "Sia",\n    "sector": "AI and Data Analytics",\n    "stage": "Seed",\n    "geography": "Global (headquartered in Bengaluru, India)",\n    "founded": "2022",\n    "description": "Sia is an Agentic AI for Data Analytics developed by Datastride Analytics. It aims to democratize data analysis by providing a simple chat interface that brings a full data team experience to everyone in an organization. The product focuses on simplifying data analytics, reducing the cost of AI adoption, and unifying organizational data processes through features like recommender engines, auto visualizations, no-code model building, and unified data integration.",\n    "financials": {\n      "revenue": 400000.0,\n      "growth_rate": 0.43,\n      "burn_rate": 16867.0,\n      "funding_raised": 520964.0,\n      "funding_seeking": 602410.0,\n      "valuation": null,\n      "runway_months": 6\n    },\n    "market": {\n      "size": 300000000000.0,\n      "target_segment": "Medium to large enterprises (500+ employees, $5M+ revenue) handling large volumes of data and using legacy systems.",\n      "competitors": [\n        "Alteryx",\n        "Dataiku",\n        "Obviously.AI"\n      ],\n      "growth_rate": 0.43\n    },\n    "team": {\n      "size": null,\n      "founders": [\n        "Divya Krishna R",\n        "Sumalata Kamat",\n        "Karthik C"\n      ],\n      "key_personnel": []\n    },\n    "product": {\n      "name": "Sia",\n      "description": "Sia is an Agentic AI solution providing a generative AI-driven chat interface for data analytics. Key features include quick analytics widgets, instant data transformations, scalable data pipelines, custom code integration, feature readability, AI guidance, conversational AI, automated charts, AI deep thinking, and unified data integration from various sources. It uses a multi-agent architecture (swarm and solo agents) and supports flexible deployment (on-premise, hybrid, or cloud).",\n      "stage": "Early product deployment / early traction",\n      "business_model": "Subscription fees (monthly/annual), one-time setup/deployment fees for on-premise solutions, annual maintenance fees, and marketplace commissions from selling data-based solutions.",\n      "competitive_advantage": "Democratization of AI & Data through a simple chat interface, context-aware insights, minimized bottlenecks, high margins due to client bearing infrastructure costs, established product, readily deployable, strong partnerships, and low R&D costs."\n    },\n    "traction": {\n      "customers": 5,\n      "users": null,\n      "partnerships": [\n        "Microsoft for Startups",\n        "NSRCEL (IIMB)",\n        "Vetrina",\n        "Saudi Telecom",\n        "Sobha group",\n        "Accolade",\n        "HDFCergo",\n        "Pfizer",\n        "Maruti Suzuki",\n        "Tata Elxsi",\n        "PROPEL ATHON",\n        "Data Services",\n        "primeNumber",\n        "Bosch",\n        "RayRC"\n      ],\n      "key_metrics": [\n        {\n          "metric": "Booked Revenue",\n          "value": "400,000 USD"\n        },\n        {\n          "metric": "Sales Pipeline Value",\n          "value": "400,000 USD"\n        },\n        {\n          "metric": "Projected Growth Opportunities",\n          "value": "4,000,000 USD"\n        },\n        {\n          "metric": "Client Lifetime Value (LTV)",\n          "value": ">1,000,000 USD"\n        },\n        {\n          "metric": "LTV:CAC Ratio",\n          "value": "Minimum 10"\n        },\n        {\n          "metric": "Profit After Tax (PAT)",\n          "value": "Minimum 30%"\n        },\n        {\n          "metric": "Time to Insights reduction",\n          "value": "90%"\n        },\n        {\n          "metric": "Volume of Data Processed increase",\n          "value": "10x"\n        },\n        {\n          "metric": "Data Analytics Budget reduction",\n          "value": "4x"\n        },\n        {\n          "metric": "Project Deployment Time saved",\n          "value": "80%"\n        }\n      ]\n    }\n  },\n  "data_quality": {\n    "consistency_score": 0.95,\n    "completeness_score": 0.7,\n    "confidence_score": 0.9,\n    "inconsistencies": [\n      "Market size growth rate for \'Global Data Analytics\' is 13% CAGR on slide 9, but an external source mentioned in the textual document for \'Big Data Analytics Market\' is 13.5% CAGR to $725.93 Billion by 2031. The data from slide 9, which is more specific to the company\'s niche (\'Agentic AI market\'), has been prioritized."\n    ],\n    "missing_critical_data": [\n      "Valuation",\n      "Total team size",\n      "Number of active users",\n      "Specific Annual Recurring Revenue (ARR) or Monthly Recurring Revenue (MRR)"\n    ]\n  },\n  "source_summary": {\n    "documents_processed": 1,\n    "primary_sources": [\n      "PDF Document (15 slides + 9 textual pages)"\n    ],\n    "data_coverage": {\n      "company_name": "Explicit",\n      "sector": "Explicit",\n      "stage": "Explicit",\n      "geography": "Inferred/Explicit",\n      "founded": "Explicit",\n      "description": "Synthesized",\n      "financials.revenue": "Explicit (booked/current) and projected",\n      "financials.growth_rate": "Explicit (market)",\n      "financials.burn_rate": "Explicit",\n      "financials.funding_raised": "Explicit (multiple sources combined)",\n      "financials.funding_seeking": "Explicit",\n      "financials.valuation": "Missing",\n      "financials.runway_months": "Explicit",\n      "market.size": "Explicit (TAM/SOM)",\n      "market.target_segment": "Explicit",\n      "market.competitors": "Explicit",\n      "market.growth_rate": "Explicit",\n      "team.size": "Missing",\n      "team.founders": "Explicit",\n      "team.key_personnel": "Missing",\n      "product.name": "Explicit",\n      "product.description": "Synthesized",\n      "product.stage": "Explicit",\n      "product.business_model": "Explicit",\n      "product.competitive_advantage": "Synthesized/Explicit",\n      "traction.customers": "Explicit (count)",\n      "traction.users": "Missing",\n      "traction.partnerships": "Explicit",\n      "traction.key_metrics": "Explicit"\n    }\n  }\n}\n```'        
         
         # Synthesize all documents with Gemini
         try:
-            synthesized = await self.synthesize_documents(processed_docs)
-            synthesized['processing_errors'] = errors  # Include any individual errors
+            synthesized = await self.synthesize_response(gemini_response, len(file_uris))
             return synthesized
         except Exception as e:
             logger.error(f"Document synthesis failed: {e}")
             return {
                 'error': f'Document synthesis failed: {str(e)}',
-                'individual_results': processed_docs,
-                'processing_errors': errors
+                'individual_results': gemini_response,
             }
 
     async def process_single_document(self, file_name: str,  file_url: str) -> Dict:
@@ -365,42 +454,20 @@ class DocumentProcessor:
                 'extraction_method': 'failed'
             }
 
-    async def synthesize_documents(self, processed_docs: List[Dict]) -> Dict:
+    async def synthesize_response(self, gemini_response, docs_processed: int) -> Dict:
         """Enhanced document synthesis using Gemini"""
         
-        if not processed_docs:
-            return {'error': 'No processed documents to synthesize'}
-        
-        # Filter valid documents
-        valid_docs = []
-        doc_errors = []
-        
-        for doc in processed_docs:
-            extracted_data = doc.get('extracted_data', {})
-            if 'error' not in extracted_data:
-                valid_docs.append(doc)
-            else:
-                doc_errors.append({
-                    'file_url': doc.get('file_url', 'unknown'),
-                    'error': extracted_data.get('error', 'Unknown error')
-                })
-        
-        if not valid_docs:
-            return {
-                'error': 'No valid documents to synthesize',
-                'document_errors': doc_errors
-            }
-        
-        all_data = [doc['extracted_data'] for doc in valid_docs]
+        if not gemini_response:
+            return {'error': 'No gemini response to synthesize'}
         
         # Create synthesis prompt
-        data_str = json.dumps(all_data, indent=2)
+        data_str = json.dumps(gemini_response, indent=2)
         max_chars = 10000
         if len(data_str) > max_chars:
             data_str = data_str[:max_chars] + "\n... [data truncated for processing]"
         
         prompt = f"""
-        Synthesize data from {len(all_data)} business documents. Cross-reference information and create a unified view.
+        Synthesize data from {docs_processed} business documents. Cross-reference information and create a unified view.
 
         Document data:
         {data_str}
@@ -456,7 +523,7 @@ class DocumentProcessor:
                 "missing_critical_data": []
             }},
             "source_summary": {{
-                "documents_processed": {len(valid_docs)},
+                "documents_processed": {docs_processed},
                 "primary_sources": [],
                 "data_coverage": {{}}
             }}
@@ -473,14 +540,18 @@ class DocumentProcessor:
         try:
             if not self.model:
                 raise Exception("Gemini not available for synthesis")
+
+            # TODO: remove comments
+            await asyncio.sleep(5)
             
-            response = await asyncio.to_thread(self.model.generate_content, prompt)
+            # response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash", contents=[prompt])
             
-            if not response or not response.text:
-                raise Exception("Empty synthesis response from Gemini")
+            # if not response or not response.text:
+            #     raise Exception("Empty synthesis response from Gemini")
             
-            # Parse synthesis result
-            response_text = response.text.strip()
+            # # Parse synthesis result
+            # response_text = response.text.strip()
+            response_text = '```json\n{\n  "synthesized_data": {\n    "company_name": "Sia",\n    "sector": "AI and Data Analytics",\n    "stage": "Seed",\n    "geography": "Global (headquartered in Bengaluru, India)",\n    "founded": "2022",\n    "description": "Sia is an Agentic AI for Data Analytics developed by Datastride Analytics. It aims to democratize data analysis by providing a simple chat interface that brings a full data team experience to everyone in an organization. The product focuses on simplifying data analytics, reducing the cost of AI adoption, and unifying organizational data processes through features like recommender engines, auto visualizations, no-code model building, and unified data integration.",\n    "financials": {\n      "revenue": 400000.0,\n      "growth_rate": 0.43,\n      "burn_rate": 16867.0,\n      "funding_raised": 520964.0,\n      "funding_seeking": 602410.0,\n      "valuation": null,\n      "runway_months": 6\n    },\n    "market": {\n      "size": 300000000000.0,\n      "target_segment": "Medium to large enterprises (500+ employees, $5M+ revenue) handling large volumes of data and using legacy systems.",\n      "competitors": [\n        "Alteryx",\n        "Dataiku",\n        "Obviously.AI"\n      ],\n      "growth_rate": 0.43\n    },\n    "team": {\n      "size": null,\n      "founders": [\n        "Divya Krishna R",\n        "Sumalata Kamat",\n        "Karthik C"\n      ],\n      "key_personnel": []\n    },\n    "product": {\n      "name": "Sia",\n      "description": "Sia is an Agentic AI solution providing a generative AI-driven chat interface for data analytics. Key features include quick analytics widgets, instant data transformations, scalable data pipelines, custom code integration, feature readability, AI guidance, conversational AI, automated charts, AI deep thinking, and unified data integration from various sources. It uses a multi-agent architecture (swarm and solo agents) and supports flexible deployment (on-premise, hybrid, or cloud).",\n      "stage": "Early product deployment / early traction",\n      "business_model": "Subscription fees (monthly/annual), one-time setup/deployment fees for on-premise solutions, annual maintenance fees, and marketplace commissions from selling data-based solutions.",\n      "competitive_advantage": "Democratization of AI & Data through a simple chat interface, context-aware insights, minimized bottlenecks, high margins due to client bearing infrastructure costs, established product, readily deployable, strong partnerships, and low R&D costs."\n    },\n    "traction": {\n      "customers": 5,\n      "users": null,\n      "partnerships": [\n        "Microsoft for Startups",\n        "NSRCEL (IIMB)",\n        "Vetrina",\n        "Saudi Telecom",\n        "Sobha group",\n        "Accolade",\n        "HDFCergo",\n        "Pfizer",\n        "Maruti Suzuki",\n        "Tata Elxsi",\n        "PROPEL ATHON",\n        "Data Services",\n        "primeNumber",\n        "Bosch",\n        "RayRC"\n      ],\n      "key_metrics": [\n        {\n          "metric": "Booked Revenue",\n          "value": "400,000 USD"\n        },\n        {\n          "metric": "Sales Pipeline Value",\n          "value": "400,000 USD"\n        },\n        {\n          "metric": "Projected Growth Opportunities",\n          "value": "4,000,000 USD"\n        },\n        {\n          "metric": "Client Lifetime Value (LTV)",\n          "value": ">1,000,000 USD"\n        },\n        {\n          "metric": "LTV:CAC Ratio",\n          "value": "Minimum 10"\n        },\n        {\n          "metric": "Profit After Tax (PAT)",\n          "value": "Minimum 30%"\n        },\n        {\n          "metric": "Time to Insights reduction",\n          "value": "90%"\n        },\n        {\n          "metric": "Volume of Data Processed increase",\n          "value": "10x"\n        },\n        {\n          "metric": "Data Analytics Budget reduction",\n          "value": "4x"\n        },\n        {\n          "metric": "Project Deployment Time saved",\n          "value": "80%"\n        }\n      ]\n    }\n  },\n  "data_quality": {\n    "consistency_score": 0.95,\n    "completeness_score": 0.7,\n    "confidence_score": 0.9,\n    "inconsistencies": [\n      "Market size growth rate for \'Global Data Analytics\' is 13% CAGR on slide 9, but an external source mentioned in the textual document for \'Big Data Analytics Market\' is 13.5% CAGR to $725.93 Billion by 2031. The data from slide 9, which is more specific to the company\'s niche (\'Agentic AI market\'), has been prioritized."\n    ],\n    "missing_critical_data": [\n      "Valuation",\n      "Total team size",\n      "Number of active users",\n      "Specific Annual Recurring Revenue (ARR) or Monthly Recurring Revenue (MRR)"\n    ]\n  },\n  "source_summary": {\n    "documents_processed": 1,\n    "primary_sources": [\n      "PDF Document (15 slides + 9 textual pages)"\n    ],\n    "data_coverage": {\n      "company_name": "Explicit",\n      "sector": "Explicit",\n      "stage": "Explicit",\n      "geography": "Inferred/Explicit",\n      "founded": "Explicit",\n      "description": "Synthesized",\n      "financials.revenue": "Explicit (booked/current) and projected",\n      "financials.growth_rate": "Explicit (market)",\n      "financials.burn_rate": "Explicit",\n      "financials.funding_raised": "Explicit (multiple sources combined)",\n      "financials.funding_seeking": "Explicit",\n      "financials.valuation": "Missing",\n      "financials.runway_months": "Explicit",\n      "market.size": "Explicit (TAM/SOM)",\n      "market.target_segment": "Explicit",\n      "market.competitors": "Explicit",\n      "market.growth_rate": "Explicit",\n      "team.size": "Missing",\n      "team.founders": "Explicit",\n      "team.key_personnel": "Missing",\n      "product.name": "Explicit",\n      "product.description": "Synthesized",\n      "product.stage": "Explicit",\n      "product.business_model": "Explicit",\n      "product.competitive_advantage": "Synthesized/Explicit",\n      "traction.customers": "Explicit (count)",\n      "traction.users": "Missing",\n      "traction.partnerships": "Explicit",\n      "traction.key_metrics": "Explicit"\n    }\n  }\n}\n```'
             json_start = response_text.find('{')
             json_end = response_text.rfind('}') + 1
             
@@ -492,8 +563,7 @@ class DocumentProcessor:
             
             # Add processing metadata
             synthesis_result['processing_info'] = {
-                'documents_processed': len(valid_docs),
-                'document_errors': doc_errors,
+                'documents_processed': docs_processed,
                 'synthesis_method': 'gemini_enhanced'
             }
             
@@ -503,15 +573,13 @@ class DocumentProcessor:
             logger.error(f"Synthesis JSON parsing error: {e}")
             return {
                 'error': f'Synthesis parsing failed: {str(e)}',
-                'individual_results': all_data,
-                'document_errors': doc_errors
+                'individual_results': gemini_response,
             }
         except Exception as e:
             logger.error(f"Document synthesis failed: {e}")
             return {
                 'error': f'Document synthesis failed: {str(e)}',
-                'individual_results': all_data,
-                'document_errors': doc_errors
+                'individual_results': gemini_response,
             }
 
     async def _extract_pdf_text_and_images(self, file_content: bytes) -> tuple[str, list[bytes]]:

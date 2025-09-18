@@ -1,12 +1,13 @@
 # Google AI clients
 
 # utils/ai_client.py
-import google.generativeai as genai
+from google import genai
 import os
 from functools import wraps
 from datetime import datetime
 from fastapi import HTTPException
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +23,12 @@ def configure_gemini():
         return True
     
     try:
-        key = os.getenv('GEMINI_API_KEY')
-        if not key:
-            logger.warning("No Gemini API key provided")
-            return False
-            
-        genai.configure(api_key=key)
+        # TODO: implement better check for if gemini is configured
+        client = genai.Client(
+            vertexai=True,
+            project="ventureval-ef705",
+            location="us-central1"
+        )
         _gemini_configured = True
         logger.info("Gemini configured successfully")
         return True

@@ -3,7 +3,7 @@ import json
 import asyncio
 from typing import Dict, Optional
 from datetime import datetime
-import google.generativeai as genai
+from google import genai
 from utils.ai_client import configure_gemini
 import logging
 
@@ -14,7 +14,12 @@ class BenchmarkEngine:
         """Initialize with Gemini configuration"""
         self.gemini_available = configure_gemini()
         if self.gemini_available:
-            self.model = genai.GenerativeModel('gemini-pro')
+            self.model = genai.Client(
+                vertexai=True,
+                project="ventureval-ef705",
+                location="us-central1"
+            )
+            # self.model = genai.GenerativeModel('gemini-pro')
             logger.info("BenchmarkEngine initialized with Gemini AI")
         else:
             logger.warning("BenchmarkEngine falling back to static benchmarks")
@@ -86,7 +91,7 @@ class BenchmarkEngine:
             Valuations in millions USD.
             """
             
-            response = await asyncio.to_thread(self.model.generate_content, prompt)
+            response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash", contents = [prompt])
             response_text = response.text.strip()
             
             # Extract JSON from response
@@ -232,7 +237,7 @@ class BenchmarkEngine:
             Make insights specific, actionable, and relevant to the sector and stage.
             """
             
-            response = await asyncio.to_thread(self.model.generate_content, prompt)
+            response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash",contents = [prompt])
             response_text = response.text.strip()
             
             # Extract JSON array
