@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.venv
+.env
+__pycache__/
+.idea
+.DS_Store
+.vscode
+.sonarlint

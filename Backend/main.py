@@ -1,0 +1,70 @@
+# FastAPI application
+
+# main.py - FastAPI Application
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+import uvicorn
+import sys
+import os
+from utils.ai_client import cost_monitor
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Add the Backend directory to Python path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Routers
+from routers import analysis, documents, agent
+from models.database import init_firebase
+from utils.ai_client import init_ai_clients
+
+app = FastAPI(title="AI Startup Analyst", version="1.0.0")
+
+# CORS for React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "https://your-app.web.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize services
+@app.on_event("startup")
+async def startup_event():
+    print("Starting up...")
+    init_firebase()
+    init_ai_clients()
+
+# Include routers
+app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
+app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
+app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
+
+@app.get("/")
+async def root():
+    return {"message": "AI Startup Analyst API", "status": "running"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+@app.get("/api/admin/usage")
+async def get_usage_stats():
+    """Get current usage statistics"""
+    
+    if cost_monitor:
+        return {
+            'daily_usage': cost_monitor.usage_tracking,
+            'limits': cost_monitor.daily_limits,
+            'status': 'active'
+        }
+    
+    return {'status': 'monitoring_unavailable'}
+
