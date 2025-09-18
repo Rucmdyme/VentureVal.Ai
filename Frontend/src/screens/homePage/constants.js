@@ -8,28 +8,28 @@ import {
 
 export const materialTypes = [
   {
-    key: "pitchDeck",
+    key: "pitch_deck",
     title: "Pitch Decks",
     desc: "Upload startup pitch presentations and decks",
     formats: "Supports: .pdf,.doc,.docx,.txt,.jpg,.jpeg,.png",
     icon: "description",
   },
   {
-    key: "callTranscript",
+    key: "call_transcript",
     title: "Call Transcripts",
     desc: "Upload recorded call transcripts and meeting notes",
     formats: "Supports: .pdf,.doc,.docx,.txt,.jpg,.jpeg,.png",
     icon: "call",
   },
   {
-    key: "founderUpdate",
+    key: "founder_update",
     title: "Founder Updates",
     desc: "Upload investor updates and progress reports",
     formats: "Supports: .pdf,.doc,.docx,.txt,.jpg,.jpeg,.png",
     icon: "trending_up",
   },
   {
-    key: "emailComm",
+    key: "email_communication",
     title: "Email Communications",
     desc: "Upload email threads and correspondence",
     formats: "Supports: .pdf,.doc,.docx,.txt,.jpg,.jpeg,.png",

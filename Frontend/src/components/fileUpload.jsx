@@ -17,8 +17,6 @@ function FileUpload({
   onFileChange,
   maxFiles = 1,
 }) {
-  console.log("key", uploadKey);
-
   const inputId = `fileInput-${uploadKey}`;
   const handleFiles = (newFiles) => {
     const fileList = Array.from(newFiles).slice(0, maxFiles);
