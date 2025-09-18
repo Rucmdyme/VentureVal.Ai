@@ -100,14 +100,14 @@ class WeightingCalculator:
     def calculate_growth_score(self, data: Dict, benchmarks: Dict) -> float:
         """Calculate growth potential score"""
         
-        growth_rate = data.get('financials', {}).get('growth_rate', 0)
+        growth_rate = (data.get('financials') or {}).get('growth_rate') or 0
         
         if growth_rate == 0:
             return 3.0  # Below average if no growth data
         
         # Compare to sector benchmarks
-        sector_growth = benchmarks.get('percentiles', {}).get('growth_rate', {})
-        percentile = sector_growth.get('percentile', 50)
+        sector_growth = (benchmarks.get('percentiles') or {}).get('growth_rate') or {}
+        percentile = sector_growth.get('percentile') or 50
         
         # Convert percentile to 1-10 score
         if percentile >= 90:
@@ -124,10 +124,10 @@ class WeightingCalculator:
     def calculate_market_score(self, data: Dict) -> float:
         """Calculate market opportunity score"""
         
-        market = data.get('market', {})
-        market_size = market.get('size', 0)
-        target = market.get('target', '')
-        competitors = market.get('competitors', [])
+        market = data.get('market') or {}
+        market_size = market.get('size') or 0
+        target = market.get('target') or ''
+        competitors = market.get('competitors') or []
         
         score = 5.0  # Base score
         
@@ -152,14 +152,14 @@ class WeightingCalculator:
     def calculate_team_score(self, data: Dict) -> float:
         """Calculate team quality score"""
         
-        team = data.get('team', {})
-        team_size = team.get('size', 0)
-        founders = team.get('founders', [])
+        team = data.get('team') or {}
+        team_size = team.get('size') or 0
+        founders = team.get('founders') or []
         
         score = 5.0  # Base score
         
         # Team size appropriateness
-        stage = data.get('stage', '').lower()
+        stage = (data.get('stage') or '').lower()
         if stage == 'seed' and 3 <= team_size <= 10:
             score += 1.5
         elif stage == 'series_a' and 8 <= team_size <= 25:
@@ -176,10 +176,10 @@ class WeightingCalculator:
         return min(10.0, max(1.0, score))
 
     def calculate_product_score(self, data: Dict) -> float:
-        product = data.get('product', {})
-        description = product.get('description', '')
-        differentiation = product.get('differentiation', '')
-        stage = product.get('stage', '')
+        product = data.get('product') or {}
+        description = product.get('description') or ''
+        differentiation = product.get('differentiation') or ''
+        stage = product.get('stage') or ''
         
         score = 5.0  # Base score
         
@@ -204,9 +204,9 @@ class WeightingCalculator:
     def calculate_financial_score(self, data: Dict, benchmarks: Dict) -> float:
         """Calculate financial metrics score"""
         
-        financials = data.get('financials', {})
-        revenue = financials.get('revenue', 0)
-        growth_rate = financials.get('growth_rate', 0)
+        financials = data.get('financials') or {}
+        revenue = financials.get('revenue') or 0
+        growth_rate = financials.get('growth_rate') or 0
         
         score = 5.0  # Base score
         
@@ -227,9 +227,9 @@ class WeightingCalculator:
     def calculate_competitive_score(self, data: Dict) -> float:
         """Calculate competitive position score"""
         
-        market = data.get('market', {})
-        competitors = market.get('competitors', [])
-        differentiation = data.get('product', {}).get('differentiation', '')
+        market = data.get('market') or {}
+        competitors = market.get('competitors') or []
+        differentiation = (data.get('product') or {}).get('differentiation') or ''
         
         score = 5.0  # Base score
         
