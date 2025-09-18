@@ -93,8 +93,8 @@ class DocumentProcessor:
         if not download_urls:
             return {'error': 'No valid files found at provided storage paths'}
 
-        # Extract just the URLs for processing
-        file_urls = list(download_urls.values())
+        # Extract just the URLs for 
+        file_names = list(download_urls.keys())
         
         tasks = []
         for file_name, file_url in download_urls.items():
@@ -109,37 +109,31 @@ class DocumentProcessor:
         
         # Filter successful results
         processed_docs = []
-        errors = []
         
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                errors.append({
-                    'file_url': file_urls[i],
-                    'error': str(result)
-                })
+                logger.error(f"Document processing failed for file_name:{file_names[i]}, error: {str(result)}")
+            elif isinstance(result, dict) and 'error' in result:
+                logger.error(f"Document processing error for file_name:{file_names[i]}, error: {result['error']}")
             else:
                 processed_docs.append({
-                    'file_url': file_urls[i],
+                    'file_name': file_names[i],
                     'extracted_data': result
                 })
         
         if not processed_docs:
             return {
                 'error': 'No documents were successfully processed',
-                'errors': errors
             }
         
         # Synthesize all documents with Gemini
         try:
             synthesized = await self.synthesize_documents(processed_docs)
-            synthesized['processing_errors'] = errors  # Include any individual errors
             return synthesized
         except Exception as e:
             logger.error(f"Document synthesis failed: {e}")
             return {
                 'error': f'Document synthesis failed: {str(e)}',
-                'individual_results': processed_docs,
-                'processing_errors': errors
             }
 
     async def process_single_document(self, file_name: str,  file_url: str) -> Dict:
@@ -151,24 +145,24 @@ class DocumentProcessor:
             file_content = await self.download_file(file_url)
             file_extension = self._get_file_extension(file_name)
             
-            logger.info(f"Processing {file_url} with extension {file_extension}")
+            logger.info(f"Processing {file_name} with extension {file_extension}")
 
             if file_extension in self.image_formats:
-                return await self._process_image_with_gemini(file_content, file_url)
+                return await self._process_image_with_gemini(file_content, file_name)
             elif file_extension in self.pdf_formats:
-                return await self._process_pdf_enhanced(file_content, file_url)
+                return await self._process_pdf_enhanced(file_content, file_name)
             elif file_extension in self.office_formats:
-                return await self._process_office_document(file_content, file_url, file_extension)
+                return await self._process_office_document(file_content, file_name)
             elif file_extension in self.text_formats:
-                return await self._process_text_with_gemini(file_content.decode('utf-8'), file_url)
+                return await self._process_text_with_gemini(file_content.decode('utf-8'), file_name)
             else:
-                return {'error': f'Unsupported file type: {file_extension}', 'file_url': file_url}
+                return {'error': f'Unsupported file type: {file_extension}'}
 
         except Exception as e:
-            logger.error(f"Failed to process document {file_url}: {e}")
-            return {'error': f'Critical processing failure: {str(e)}', 'file_url': file_url}
+            logger.error(f"Failed to process document {file_name}: {e}")
+            return {'error': f'Critical processing failure: {str(e)}'}
 
-    async def _process_image_with_gemini(self, file_content: bytes, file_url: str) -> Dict:
+    async def _process_image_with_gemini(self, file_content: bytes, file_name: str) -> Dict:
         """Process images using Gemini Vision"""
         
         try:
@@ -227,74 +221,68 @@ class DocumentProcessor:
             # Add metadata
             structured_data.update({
                 'extraction_method': 'gemini_vision',
-                'file_url': file_url,
+                'file_name': file_name,
                 'file_type': 'image',
-                'image_dimensions': f"{image.width}x{image.height}"
             })
             
             return structured_data
             
         except Exception as e:
-            logger.error(f"Gemini image processing error for {file_url}: {e}")
+            logger.error(f"Gemini image processing error for {file_name}: {e}")
             return {
                 'error': f'Image processing failed: {str(e)}',
-                'file_url': file_url,
-                'file_type': 'image'
             }
 
-    async def _process_pdf_enhanced(self, file_content: bytes, file_url: str) -> Dict:
+    async def _process_pdf_enhanced(self, file_content: bytes, file_name: str) -> Dict:
         """Orchestrates multi-modal analysis for a PDF document."""
         text, images = await self._extract_pdf_text_and_images(file_content)
         if not text.strip() and not images:
-            return {'error': 'PDF is empty or could not be parsed', 'file_url': file_url}
+            return {'error': 'PDF is empty or could not be parsed'}
 
         tasks = []
         if text.strip():
-            tasks.append(self._process_text_with_gemini(text, file_url, "Extracted from PDF."))
+            tasks.append(self._process_text_with_gemini(text, file_name, "Extracted from PDF."))
         for i, img in enumerate(images):
-            tasks.append(self._process_image_with_gemini(img, f"{file_url}#image_{i+1}"))
+            tasks.append(self._process_image_with_gemini(img, f"{file_name}#image_{i+1}"))
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Combine results into a single object for this document
-        return self._combine_multimodal_results(results, file_url, 'pdf', len(text), len(images))
+        return self._combine_multimodal_results(results, file_name, 'pdf', len(text), len(images))
 
-    async def _process_office_document(self, file_content: bytes, file_url: str, file_extension: str) -> Dict:
+    async def _process_office_document(self, file_content: bytes, file_name: str) -> Dict:
         """Orchestrates analysis for Office documents, primarily DOCX."""
         text, images = await self._extract_docx_text_and_images(file_content)
         if not text.strip() and not images:
-            return {'error': 'DOCX file is empty or could not be parsed', 'file_url': file_url}
-        
+            return {'error': 'DOCX file is empty or could not be parsed'}
+
         tasks = []
         if text.strip():
-            tasks.append(self._process_text_with_gemini(text, file_url, "Extracted from DOCX."))
+            tasks.append(self._process_text_with_gemini(text, file_name, "Extracted from DOCX."))
         for i, img in enumerate(images):
-            tasks.append(self._process_image_with_gemini(img, f"{file_url}#image_{i+1}"))
+            tasks.append(self._process_image_with_gemini(img, f"{file_name}#image_{i+1}"))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        return self._combine_multimodal_results(results, file_url, 'docx', len(text), len(images))
+        return self._combine_multimodal_results(results, file_name, 'docx', len(text), len(images))
 
-    async def _process_text_with_gemini(self, text_content: str, file_url: str, extra_context: str = "") -> Dict:
+    async def _process_text_with_gemini(self, text_content: str, file_name: str, extra_context: str = "") -> Dict:
         """Process text content with Gemini for enhanced structured extraction"""
         
         if not text_content.strip():
-            return {'error': 'Empty text content', 'file_url': file_url}
-        
+            return {'error': 'Empty text content'}
+
         try:
             structured_data = await self.extract_structured_data(text_content, 'business_document', extra_context)
-            structured_data['file_url'] = file_url # Ensure URL is in final output
+            structured_data['file_name'] = file_name
             return structured_data
         except Exception as e:
             return {
                 'error': f'Text processing failed: {str(e)}',
-                'raw_text': text_content[:1000] + "..." if len(text_content) > 1000 else text_content,
-                'file_url': file_url
             }
 
-    def _get_file_extension(self, file_url: str) -> str:
-        """Extract file extension from URL"""
-        path = urlparse(file_url).path
-        return os.path.splitext(path.lower())[-1]
+    def _get_file_extension(self, file_name: str) -> str:
+        """Extract file extension from file name"""
+        return os.path.splitext(file_name.lower())[-1]
 
     async def extract_structured_data(self, text: str, doc_type: str, extra_context: str = "") -> Dict:
         """Enhanced structured data extraction using Gemini"""
@@ -330,7 +318,8 @@ class DocumentProcessor:
             "founders": [],
             "competitors": [],
             "key_partnerships": [],
-            "confidence_score": 0.0
+            "extracted_text": "all relevant text excerpts",
+            "confidence_score": 0.0,
         }}
 
         Rules:
@@ -361,8 +350,6 @@ class DocumentProcessor:
             logger.error(f"Gemini structured extraction failed: {e}")
             return {
                 'error': f'Structured extraction failed: {str(e)}',
-                'raw_text': text[:1000] + "..." if len(text) > 1000 else text,
-                'extraction_method': 'failed'
             }
 
     async def synthesize_documents(self, processed_docs: List[Dict]) -> Dict:
@@ -381,14 +368,13 @@ class DocumentProcessor:
                 valid_docs.append(doc)
             else:
                 doc_errors.append({
-                    'file_url': doc.get('file_url', 'unknown'),
+                    'file_name': doc.get('file_name', 'unknown'),
                     'error': extracted_data.get('error', 'Unknown error')
                 })
         
         if not valid_docs:
             return {
                 'error': 'No valid documents to synthesize',
-                'document_errors': doc_errors
             }
         
         all_data = [doc['extracted_data'] for doc in valid_docs]
@@ -503,15 +489,11 @@ class DocumentProcessor:
             logger.error(f"Synthesis JSON parsing error: {e}")
             return {
                 'error': f'Synthesis parsing failed: {str(e)}',
-                'individual_results': all_data,
-                'document_errors': doc_errors
             }
         except Exception as e:
             logger.error(f"Document synthesis failed: {e}")
             return {
                 'error': f'Document synthesis failed: {str(e)}',
-                'individual_results': all_data,
-                'document_errors': doc_errors
             }
 
     async def _extract_pdf_text_and_images(self, file_content: bytes) -> tuple[str, list[bytes]]:
@@ -542,7 +524,7 @@ class DocumentProcessor:
             logger.error(f"Failed to extract content from DOCX: {e}")
             return "", []
 
-    def _combine_multimodal_results(self, results: List[Any], url: str, ftype: str, tlen: int, ilen: int) -> Dict:
+    def _combine_multimodal_results(self, results: List[Any], file_name: str, ftype: str, tlen: int, ilen: int) -> Dict:
         """Helper to combine text and image analysis results for a single document."""
         text_analysis, image_analyses, errors = {}, [], []
         for res in results:
@@ -556,7 +538,7 @@ class DocumentProcessor:
                 text_analysis = res
         
         return {
-            'file_url': url,
+            'file_name': file_name,
             'file_type': ftype,
             'extraction_method': 'multi-modal_enhanced',
             'text_based_analysis': text_analysis,
@@ -594,7 +576,7 @@ class DocumentProcessor:
                 'funding_seeking': None, 'market_size': None, 'problem': '',
                 'solution': '', 'business_model': '', 'traction_metrics': [],
                 'founders': [], 'competitors': [], 'key_partnerships': [],
-                'confidence_score': 0.5
+                'confidence_score': 0.5, 'document_type': '', 'extracted_text': '', 'key_metrics': []
             }
             
             # Merge parsed data into the default structure
@@ -604,10 +586,9 @@ class DocumentProcessor:
             
             return final_data
 
-        except (json.JSONDecodeError, ValueError) as e:
+        except Exception as e:
             # 4. Catch errors and return a structured error response, like in Function 1
             logger.error(f"Failed to parse Gemini response: {e}")
             return {
                 'error': f'Could not parse structured data from response: {str(e)}',
-                'raw_response': response_text[:500] + "..." if len(response_text) > 500 else response_text
             }
