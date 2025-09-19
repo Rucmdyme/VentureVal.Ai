@@ -751,7 +751,8 @@ class DocumentProcessor:
                 "team": {{
                     "size": null,
                     "founders": [],
-                    "key_personnel": []
+                    "key_personnel": [],
+                    "key_hires": []
                 }},
                 "product": {{
                     "name": "",

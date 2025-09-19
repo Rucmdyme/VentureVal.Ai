@@ -131,7 +131,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
     
     try:
         # Step 1: Document Processing
-        await update_progress(analysis_id, 10, "Processing documents...")
+        await update_progress(analysis_id, 21, "Processing documents...")
         
         try:
             processed_data = await doc_processor.process_documents_from_storage(request.storage_paths)
