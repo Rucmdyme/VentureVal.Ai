@@ -36,59 +36,110 @@ class BenchmarkEngine:
             stage_info = f" for {stage} stage companies" if stage else ""
             
             prompt = f"""
-            Generate realistic startup benchmark data for the {sector} sector in {geography}{stage_info}.
-            
-            Return ONLY valid JSON in this exact format:
+            You are a senior investment analyst with access to comprehensive market data. Generate realistic and accurate startup benchmark percentiles for the {sector} sector in {geography}{stage_info} based on current 2024-2025 market conditions.
+
+            SECTOR CONTEXT: {sector}
+            GEOGRAPHY: {geography}
+            STAGE: {stage if stage else 'All stages'}
+
+            BENCHMARKING REQUIREMENTS:
+            1. Use actual market data patterns for {sector} companies
+            2. Account for current economic conditions and funding environment
+            3. Reflect stage-appropriate metrics for {stage if stage else 'various stages'}
+            4. Consider geographic market differences for {geography}
+            5. Include sector-specific business model characteristics
+
+            SECTOR-SPECIFIC CONSIDERATIONS FOR {sector}:
+            - Typical business models and revenue streams
+            - Standard unit economics and growth patterns  
+            - Market maturity and competitive dynamics
+            - Capital requirements and burn rate patterns
+            - Team composition and scaling requirements
+            - Valuation multiples and investor expectations
+
+            STAGE-SPECIFIC ADJUSTMENTS{f' FOR {stage.upper()}' if stage else ''}:
+            - Appropriate revenue ranges and growth expectations
+            - Team size and organizational structure
+            - Funding amounts and valuation ranges
+            - Burn rate and runway expectations
+            - Traction and customer metrics
+
+            Return ONLY valid JSON in this exact format with realistic numbers:
             {{
                 "revenue_multiples": {{
-                    "p10": <number>,
-                    "p25": <number>,
-                    "p50": <number>,
-                    "p75": <number>,
-                    "p90": <number>
+                    "p10": "10th percentile annual revenue in USD",
+                    "p25": "25th percentile annual revenue in USD", 
+                    "p50": "50th percentile (median) annual revenue in USD",
+                    "p75": "75th percentile annual revenue in USD",
+                    "p90": "90th percentile annual revenue in USD"
                 }},
                 "growth_rates": {{
-                    "p10": <number>,
-                    "p25": <number>,
-                    "p50": <number>,
-                    "p75": <number>,
-                    "p90": <number>
+                    "p10": "10th percentile annual revenue growth rate percentage",
+                    "p25": "25th percentile annual revenue growth rate percentage",
+                    "p50": "50th percentile annual revenue growth rate percentage", 
+                    "p75": "75th percentile annual revenue growth rate percentage",
+                    "p90": "90th percentile annual revenue growth rate percentage"
                 }},
                 "team_sizes": {{
-                    "p10": <number>,
-                    "p25": <number>,
-                    "p50": <number>,
-                    "p75": <number>,
-                    "p90": <number>
+                    "p10": "10th percentile total team size (full-time employees)",
+                    "p25": "25th percentile total team size",
+                    "p50": "50th percentile total team size",
+                    "p75": "75th percentile total team size", 
+                    "p90": "90th percentile total team size"
                 }},
                 "burn_rates_monthly": {{
-                    "p10": <number>,
-                    "p25": <number>,
-                    "p50": <number>,
-                    "p75": <number>,
-                    "p90": <number>
+                    "p10": "10th percentile monthly cash burn in USD",
+                    "p25": "25th percentile monthly cash burn in USD",
+                    "p50": "50th percentile monthly cash burn in USD",
+                    "p75": "75th percentile monthly cash burn in USD",
+                    "p90": "90th percentile monthly cash burn in USD"
                 }},
                 "runway_months": {{
-                    "p10": <number>,
-                    "p25": <number>,
-                    "p50": <number>,
-                    "p75": <number>,
-                    "p90": <number>
+                    "p10": "10th percentile runway in months",
+                    "p25": "25th percentile runway in months", 
+                    "p50": "50th percentile runway in months",
+                    "p75": "75th percentile runway in months",
+                    "p90": "90th percentile runway in months"
                 }},
                 "valuation_millions": {{
-                    "p10": <number>,
-                    "p25": <number>,
-                    "p50": <number>,
-                    "p75": <number>,
-                    "p90": <number>
+                    "p10": "10th percentile company valuation in millions USD",
+                    "p25": "25th percentile company valuation in millions USD",
+                    "p50": "50th percentile company valuation in millions USD",
+                    "p75": "75th percentile company valuation in millions USD", 
+                    "p90": "90th percentile company valuation in millions USD"
+                }},
+                "customer_metrics": {{
+                    "p10": "10th percentile paying customer count",
+                    "p25": "25th percentile paying customer count",
+                    "p50": "50th percentile paying customer count",
+                    "p75": "75th percentile paying customer count",
+                    "p90": "90th percentile paying customer count"
+                }},
+                "unit_economics": {{
+                    "cac_p10": "10th percentile Customer Acquisition Cost in USD",
+                    "cac_p25": "25th percentile Customer Acquisition Cost in USD",
+                    "cac_p50": "50th percentile Customer Acquisition Cost in USD",
+                    "cac_p75": "75th percentile Customer Acquisition Cost in USD",
+                    "cac_p90": "90th percentile Customer Acquisition Cost in USD",
+                    "ltv_p10": "10th percentile Lifetime Value in USD",
+                    "ltv_p25": "25th percentile Lifetime Value in USD", 
+                    "ltv_p50": "50th percentile Lifetime Value in USD",
+                    "ltv_p75": "75th percentile Lifetime Value in USD",
+                    "ltv_p90": "90th percentile Lifetime Value in USD"
                 }}
             }}
-            
-            Base this on current 2024-2025 market data for {sector} companies. 
-            Growth rates should be annual percentages.
-            Burn rates in USD per month.
-            Team sizes as employee count.
-            Valuations in millions USD.
+
+            CRITICAL REQUIREMENTS:
+            1. All numbers must be realistic for {sector} companies in {geography}
+            2. Percentiles must be properly ordered (p10 < p25 < p50 < p75 < p90)
+            3. Consider current market conditions (2024-2025 funding environment)
+            4. Account for sector-specific business model characteristics
+            5. Reflect stage-appropriate expectations and metrics
+            6. Use whole numbers for counts, appropriate precision for financial metrics
+            7. Ensure burn rates align with team sizes and stage expectations
+            8. Valuations should reflect current market multiples for the sector
+            9. Growth rates should be realistic and sustainable
+            10. Unit economics should reflect healthy vs struggling companies across percentiles
             """
             
             response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash", contents = [prompt])
@@ -224,17 +275,51 @@ class BenchmarkEngine:
             ]
             
             prompt = f"""
-            Analyze this {sector} startup's benchmark performance and provide 3-4 specific insights:
-            
-            Strong areas (75th+ percentile): {strong_areas}
-            Weak areas (below 40th percentile): {weak_areas}
-            
-            Company stage: {startup_data.get('stage', 'unknown')}
-            
-            Return ONLY a JSON array of insights:
-            ["insight 1", "insight 2", "insight 3"]
-            
-            Make insights specific, actionable, and relevant to the sector and stage.
+            You are a senior investment analyst providing detailed benchmark analysis for a {sector} startup. Generate specific, actionable insights based on their performance relative to sector peers.
+
+            COMPANY PROFILE:
+            - Sector: {sector}
+            - Stage: {startup_data.get('stage', 'unknown')}
+            - Geography: {startup_data.get('geography', 'unknown')}
+
+            PERFORMANCE ANALYSIS:
+            - Strong Performance Areas (75th+ percentile): {strong_areas}
+            - Underperforming Areas (below 40th percentile): {weak_areas}
+            - Company Revenue: {startup_data.get('financials', {}).get('revenue', 'Not disclosed')}
+            - Team Size: {startup_data.get('team', {}).get('size', 'Not disclosed')}
+            - Growth Rate: {startup_data.get('financials', {}).get('growth_rate', 'Not disclosed')}%
+
+            INSIGHT GENERATION REQUIREMENTS:
+            1. Compare performance to {sector} sector benchmarks specifically
+            2. Consider stage-appropriate expectations for {startup_data.get('stage', 'unknown')} companies
+            3. Identify competitive advantages from strong performance areas
+            4. Highlight critical improvement areas that could impact valuation
+            5. Provide sector-specific context and implications
+            6. Consider market timing and competitive dynamics
+            7. Address investor concerns and opportunities
+
+            Generate 4-5 comprehensive insights covering:
+            - Competitive positioning analysis
+            - Growth trajectory assessment  
+            - Operational efficiency evaluation
+            - Market opportunity alignment
+            - Investment risk/opportunity summary
+
+            Return ONLY a JSON array of detailed insights:
+            [
+                "Specific insight about competitive positioning with quantitative context and sector comparison",
+                "Detailed analysis of growth performance with benchmarking context and implications", 
+                "Operational efficiency assessment with specific metrics and improvement recommendations",
+                "Market opportunity evaluation with sector trends and positioning analysis",
+                "Investment summary with key strengths, concerns, and strategic recommendations"
+            ]
+
+            Each insight should be:
+            - Specific to the {sector} sector and {startup_data.get('stage', 'unknown')} stage
+            - Quantitative where possible with percentile references
+            - Actionable with clear implications for management and investors
+            - Forward-looking with market context and competitive dynamics
+            - 2-3 sentences with concrete details and recommendations
             """
             
             response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash",contents = [prompt])
