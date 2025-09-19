@@ -1,5 +1,7 @@
 # services/deal_generator.py
-import google.generativeai as genai
+from google import genai
+from google.genai import types
+
 import json
 import logging
 from typing import Dict, Optional, Any
@@ -44,14 +46,12 @@ class DealNoteGenerator:
         """Initialize Google Generative AI with proper error handling"""
         try:
             configure_gemini()
-            self._model = genai.GenerativeModel(
-                self.config.model_name,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=self.config.temperature,
-                    max_output_tokens=2048,
-                    candidate_count=1
-                )
+            self._model = genai.Client(
+                vertexai=True,
+                project="ventureval-ef705",
+                location="us-central1"
             )
+            
             logger.info("Google Generative AI initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Google Generative AI: {e}")
@@ -132,9 +132,15 @@ class DealNoteGenerator:
                 prompt = self._build_prompt(startup_data, risk_assessment, benchmark_results, weighted_scores)
                 
                 # Run the synchronous generation in an executor to make it truly async
+                generation_config = types.GenerateContentConfig(
+                    temperature=self.config.temperature,
+                    max_output_tokens=2048,
+                    candidate_count=1
+                )
+
                 response = await asyncio.get_event_loop().run_in_executor(
                     None, 
-                    lambda: self._model.generate_content(prompt)
+                    lambda: self._model.models.generate_content(model="gemini-2.5-flash",contents = [prompt], config=generation_config)
                 )
                 
                 if response and hasattr(response, 'text') and response.text:

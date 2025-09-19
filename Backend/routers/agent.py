@@ -1,6 +1,6 @@
 # routers/agent.py
 from fastapi import APIRouter, HTTPException
-import google.generativeai as genai
+from google import genai
 from typing import List, Dict, Any
 import json
 import logging
@@ -179,7 +179,11 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
         # Use async executor for AI generation
         def _generate_response():
             configure_gemini()
-            model = genai.GenerativeModel('gemini-1.5-flash')  # Updated model name
+            model = genai.Client(
+                vertexai=True,
+                project="ventureval-ef705",
+                location="us-central1"
+            )
             
             full_prompt = f"{context_prompt}\n\nINVESTOR QUESTION: {question}\n\nANSWER:"
             
