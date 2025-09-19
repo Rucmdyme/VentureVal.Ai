@@ -24,7 +24,9 @@ steps:
         '--image', 'gcr.io/ventureval-ef705/ventureval-be:$COMMIT_SHA',
         '--region', 'asia-south1',
         '--platform', 'managed',
-        '--allow-unauthenticated'
+        '--allow-unauthenticated',
+        '--set-env-vars=PROJECT_ID=ventureval-ef705,BUCKET_ID=ventureval-ef705.firebasestorage.app,GCP_REGION=asia-south1',
+        '--set-secrets=FIREBASE_CONFIG_JSON=FIREBASE_CONFIG_JSON:latest'
       ]
 
 images:
