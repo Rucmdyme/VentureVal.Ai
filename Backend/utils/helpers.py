@@ -10,9 +10,9 @@ async def update_progress(analysis_id: str, progress: int = None, message: str =
             'updated_at': datetime.now()
         }
         if progress:
-            update_data.update({f'progress': progress})
+            update_data.update({'progress': progress})
         if message:
-            update_data.update({f'message': message})
+            update_data.update({'message': message})
         if kwargs:
             update_data.update({**kwargs})
         firestore_client = get_firestore_client()

@@ -94,13 +94,7 @@ class DocumentProcessor:
         return f"gs://{blob.bucket.name}/{blob.name}"
 
 
-    def call_gemini_with_file(self, file_uris: list[str], prompt_text: str) -> str:
-        client = genai.Client(
-            vertexai=True,
-            project="ventureval-ef705",
-            location="us-central1"
-        )
-
+    async def call_gemini_with_file(self, file_uris: list[str], prompt_text: str) -> str:
         # Build contents list: prompt first
         contents = [prompt_text]
 
@@ -125,13 +119,42 @@ class DocumentProcessor:
                 "mime_type": mime_type
             })
 
-        # Send request
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=contents
-        )
+        try:
+            response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash", contents=contents)
+            
+            if not response or not response.text:
+                raise Exception("Empty synthesis response from Gemini")
+            
+            # Parse synthesis result
+            response_text = response.text.strip()
+            json_start = response_text.find('{')
+            json_end = response_text.rfind('}') + 1
+            
+            if json_start == -1 or json_end == 0:
+                raise Exception("No valid JSON in synthesis response")
+            
+            json_str = response_text[json_start:json_end]
+            synthesis_result = json.loads(json_str)
+            
+            # Add processing metadata
+            synthesis_result['processing_info'] = {
+                'documents_processed': len(file_uris),
+                'synthesis_method': 'gemini_enhanced'
+            }
+            
+            return synthesis_result
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Synthesis JSON parsing error: {e}")
+            return {
+                'error': f'Synthesis parsing failed: {str(e)}',
+            }
+        except Exception as e:
+            logger.error(f"Document synthesis failed: {e}")
+            return {
+                'error': f'Document synthesis failed: {str(e)}',
+            }
 
-        return response.text
     
     # TODO: improve prompt and clean function
     async def process_documents_from_storage(self, storage_paths: List[str]) -> Dict:
@@ -142,7 +165,7 @@ class DocumentProcessor:
 
         file_uris = [self.get_file_uri(path) for path in storage_paths]
         prompt = """
-            Extract structured business data from the attached PDF.
+            Extract structured business data from the attached files.
             Output ONLY valid JSON following this schema exactly.
             Do NOT explain your process or invent information.
             Document could be:
@@ -178,7 +201,8 @@ class DocumentProcessor:
                 "team": {
                     "size": null,
                     "founders": [],
-                    "key_personnel": []
+                    "key_personnel": [],
+                    "key_hires": []
                 },
                 "product": {
                     "name": "",
@@ -214,19 +238,15 @@ class DocumentProcessor:
             4. Don't invent information - only use what's provided
             5. Identify missing critical business data
             """
-
-        gemini_response = self.call_gemini_with_file(file_uris, prompt)
-        
-        # Synthesize all documents with Gemini
         try:
-            synthesized = await self.synthesize_response(gemini_response, len(file_uris))
+            synthesized = await  self.call_gemini_with_file(file_uris, prompt)
             return synthesized
         except Exception as e:
             logger.error(f"Document synthesis failed: {e}")
             return {
                 'error': f'Document synthesis failed: {str(e)}',
-                'individual_results': gemini_response,
-            }
+            }        
+        # Synthesize all documents with Gemini
 
     async def process_single_document(self, file_name: str,  file_url: str) -> Dict:
         """Enhanced document processing with Gemini multimodal support"""

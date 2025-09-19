@@ -75,7 +75,7 @@ class RiskAnalyzer:
             overall_risk = self.calculate_overall_risk(risks)
             
             # Generate risk explanations
-            risk_explanations = await self.generate_risk_explanations(risks, startup_data)
+            risk_explanations = await self.generate_risk_explanations(risks)
             
             # Calculate additional risk metrics
             risk_summary = self.calculate_risk_summary(risks)
@@ -639,7 +639,7 @@ class RiskAnalyzer:
             'average_severity': round(avg_severity, 2)
         }
 
-    async def generate_risk_explanations(self, risks: Dict[str, List[Dict]], startup_data: Dict) -> List[str]:
+    async def generate_risk_explanations(self, risks: Dict[str, List[Dict]]) -> List[str]:
         """Generate human-readable risk explanations"""
         
         explanations = []
