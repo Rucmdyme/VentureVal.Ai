@@ -67,11 +67,11 @@ class BenchmarkEngine:
             Return ONLY valid JSON in this exact format with realistic numbers:
             {{
                 "revenue_multiples": {{
-                    "p10": "10th percentile annual revenue in USD",
-                    "p25": "25th percentile annual revenue in USD", 
-                    "p50": "50th percentile (median) annual revenue in USD",
-                    "p75": "75th percentile annual revenue in USD",
-                    "p90": "90th percentile annual revenue in USD"
+                    "p10": "10th percentile annual revenue in multiples",
+                    "p25": "25th percentile annual revenue in multiples", 
+                    "p50": "50th percentile (median) annual revenue in multiples",
+                    "p75": "75th percentile annual revenue in multiples",
+                    "p90": "90th percentile annual revenue in multiples"
                 }},
                 "growth_rates": {{
                     "p10": "10th percentile annual revenue growth rate percentage",
@@ -107,25 +107,6 @@ class BenchmarkEngine:
                     "p50": "50th percentile company valuation in millions USD",
                     "p75": "75th percentile company valuation in millions USD", 
                     "p90": "90th percentile company valuation in millions USD"
-                }},
-                "customer_metrics": {{
-                    "p10": "10th percentile paying customer count",
-                    "p25": "25th percentile paying customer count",
-                    "p50": "50th percentile paying customer count",
-                    "p75": "75th percentile paying customer count",
-                    "p90": "90th percentile paying customer count"
-                }},
-                "unit_economics": {{
-                    "cac_p10": "10th percentile Customer Acquisition Cost in USD",
-                    "cac_p25": "25th percentile Customer Acquisition Cost in USD",
-                    "cac_p50": "50th percentile Customer Acquisition Cost in USD",
-                    "cac_p75": "75th percentile Customer Acquisition Cost in USD",
-                    "cac_p90": "90th percentile Customer Acquisition Cost in USD",
-                    "ltv_p10": "10th percentile Lifetime Value in USD",
-                    "ltv_p25": "25th percentile Lifetime Value in USD", 
-                    "ltv_p50": "50th percentile Lifetime Value in USD",
-                    "ltv_p75": "75th percentile Lifetime Value in USD",
-                    "ltv_p90": "90th percentile Lifetime Value in USD"
                 }}
             }}
 
@@ -243,7 +224,7 @@ class BenchmarkEngine:
                 'percentile': percentile,
                 'interpretation': self.interpret_percentile(percentile),
                 'benchmark_median': p50,
-                'benchmark_top_quartile': p75,
+                'benchmark_top_quartile': p25,
                 'relative_performance': self._get_relative_performance(value, p50, metric_name)
             }
             
