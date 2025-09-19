@@ -266,7 +266,7 @@ class RiskAnalyzer:
                     })
             
             # Target market analysis
-            target = market.get('target', '')
+            target = market.get('target_segment', '')
             if not target or len(target.strip()) < 20:
                 risks.append({
                     'type': 'unclear_target_market',
@@ -385,13 +385,13 @@ class RiskAnalyzer:
             # Get product data with safe access
             product = data.get('product', {}) or data.get('synthesized_data', {}).get('product', {})
             
-            # Product differentiation analysis
-            differentiation = product.get('differentiation', '')
-            if not differentiation or len(differentiation.strip()) < 30:
+            # Product competitive_advantage analysis
+            competitive_advantage = product.get('competitive_advantage', '')
+            if not competitive_advantage or len(competitive_advantage.strip()) < 30:
                 risks.append({
-                    'type': 'unclear_differentiation',
+                    'type': 'competitive_advantage_unclear',
                     'severity': 6,
-                    'details': "Product differentiation is unclear or poorly defined",
+                    'details': "Product competitive advantage is unclear or poorly defined",
                     'impact': 'medium'
                 })
             
