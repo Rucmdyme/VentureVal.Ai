@@ -407,9 +407,9 @@ class RiskAnalyzer:
                 })
             
             # Product stage analysis
-            product_stage = product.get('stage', '').lower()
-            company_stage = data.get('stage', '').lower()
-            
+            product_stage = (product.get('stage') or '').lower()
+            company_stage = (data.get('stage') or '').lower()
+
             if 'concept' in product_stage or 'idea' in product_stage:
                 if 'series_a' in company_stage:
                     risks.append({
@@ -474,7 +474,7 @@ class RiskAnalyzer:
             # Partnership analysis
             partnerships = traction.get('partnerships', [])
             if isinstance(partnerships, list) and len(partnerships) == 0:
-                stage = data.get('stage', '').lower()
+                stage = (data.get('stage') or '').lower()
                 if 'series_a' in stage or 'series_b' in stage:
                     risks.append({
                         'type': 'no_partnerships',
