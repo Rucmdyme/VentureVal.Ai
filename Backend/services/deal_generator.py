@@ -52,14 +52,6 @@ class DealNoteGenerator:
                 location="us-central1"
             )
             
-            # self._model = genai.GenerativeModel(
-            #     self.config.model_name,
-            #     generation_config=genai.types.GenerationConfig(
-            #         temperature=self.config.temperature,
-            #         max_output_tokens=2048,
-            #         candidate_count=1
-            #     )
-            # )
             logger.info("Google Generative AI initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Google Generative AI: {e}")
