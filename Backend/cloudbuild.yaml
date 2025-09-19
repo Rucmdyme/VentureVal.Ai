@@ -2,7 +2,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build',
-      '-t', 'gcr.io/$ventureval-ef705/fastapi-backend:$COMMIT_SHA',
+      '-t', 'gcr.io/ventureval-ef705/fastapi-backend:$COMMIT_SHA',
       '-f', 'Backend/Dockerfile',
       'Backend'
     ]
@@ -10,11 +10,11 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'push',
-      'gcr.io/$ventureval-ef705/fastapi-backend:$COMMIT_SHA'
+      'gcr.io/ventureval-ef705/fastapi-backend:$COMMIT_SHA'
     ]
 
 images:
-  - 'gcr.io/$ventureval-ef705/fastapi-backend:$COMMIT_SHA'
+  - 'gcr.io/ventureval-ef705/fastapi-backend:$COMMIT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
