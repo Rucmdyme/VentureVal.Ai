@@ -145,19 +145,16 @@ class DealNoteGenerator:
                     max_output_tokens=2048,
                     candidate_count=1
                 )
-                # TODO: remove comments
-                await asyncio.sleep(5)
 
-                # response = await asyncio.get_event_loop().run_in_executor(
-                #     None, 
-                #     lambda: self._model.models.generate_content(model="gemini-2.5-flash",contents = [prompt], config=generation_config)
-                # )
+                response = await asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    lambda: self._model.models.generate_content(model="gemini-2.5-flash",contents = [prompt], config=generation_config)
+                )
                 
-                # if response and hasattr(response, 'text') and response.text:
-                #     return response.text.strip()
-                # else:
-                #     raise ValueError("Empty response from AI model")
-                return '**EXECUTIVE SUMMARY**\nSia, a seed-stage Agentic AI for Data Analytics startup, operates in a large addressable market, offering a solution to democratize data analysis for enterprises. Despite the market potential and a notably low burn rate, a comprehensive review reveals critical concerns regarding its operational metrics and financial viability. The company exhibits an extremely short runway of 6 months, poor revenue and growth rate performance against benchmarks, and unvalidated, highly ambitious financial projections based on a nascent customer base. Consequently, with an overall score of 2.5/10, we recommend a PASS on this investment opportunity.'
+                if response and hasattr(response, 'text') and response.text:
+                    return response.text.strip()
+                else:
+                    raise ValueError("Empty response from AI model")
                     
             except Exception as e:
                 logger.warning(f"Generation attempt {attempt + 1} failed: {e}")
