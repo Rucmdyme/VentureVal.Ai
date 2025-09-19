@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DealNoteConfig:
     """Configuration for deal note generation"""
-    max_prompt_length: int = 4000
+    max_prompt_length: int = 12000
     max_retries: int = 3
-    timeout_seconds: int = 30
-    model_name: str = 'gemini-pro'
-    temperature: float = 0.7
+    timeout_seconds: int = 60
+    model_name: str = 'gemini-2.5-flash'
+    temperature: float = 0.3
 
 def async_timeout(seconds: int):
     """Decorator to add timeout to async functions"""
@@ -57,7 +57,7 @@ class DealNoteGenerator:
             logger.error(f"Failed to initialize Google Generative AI: {e}")
             self._model = None
     
-    @async_timeout(30)
+    @async_timeout(60)
     async def generate_deal_note(
         self, 
         startup_data: Dict[str, Any], 
@@ -134,7 +134,7 @@ class DealNoteGenerator:
                 # Run the synchronous generation in an executor to make it truly async
                 generation_config = types.GenerateContentConfig(
                     temperature=self.config.temperature,
-                    max_output_tokens=2048,
+                    max_output_tokens=4096,
                     candidate_count=1
                 )
 
@@ -181,64 +181,149 @@ class DealNoteGenerator:
         overall_score = weighted_scores.get('overall_score', 0)
         recommendation_tier = weighted_scores.get('recommendation', {}).get('tier', 'N/A')
         
-        # Safely serialize complex data with length limits
-        startup_data_str = self._safe_json_dump(startup_data, 1500)
-        benchmark_str = self._safe_json_dump(benchmark_results, 800)
+        # Extract key metrics for better context
+        financials = startup_data.get('financials', {}) or startup_data.get('synthesized_data', {}).get('financials', {})
+        market = startup_data.get('market', {}) or startup_data.get('synthesized_data', {}).get('market', {})
+        team = startup_data.get('team', {}) or startup_data.get('synthesized_data', {}).get('team', {})
+        traction = startup_data.get('traction', {}) or startup_data.get('synthesized_data', {}).get('traction', {})
+        
+        # Format key metrics clearly
+        startup_data_str = f"""
+Revenue: ${financials.get('revenue', 'Not disclosed')}
+Growth Rate: {financials.get('growth_rate', 'Not disclosed')}%
+Burn Rate: ${financials.get('burn_rate', 'Not disclosed')}/month
+Funding Raised: ${financials.get('funding_raised', 'Not disclosed')}
+Team Size: {team.get('size', 'Not disclosed')}
+Customers: {traction.get('customers', 'Not disclosed')}
+Market Size: ${market.get('size', 'Not disclosed')}
+Competitors: {', '.join(market.get('competitors', [])[:3]) if market.get('competitors') else 'Not disclosed'}
+"""
+        
+        # Format benchmark results
+        percentiles = benchmark_results.get('percentiles', {})
+        benchmark_str = f"""
+Overall Score: {benchmark_results.get('overall_score', {}).get('score', 'N/A')}/100
+Revenue Percentile: {percentiles.get('revenue', {}).get('percentile', 'N/A')}th
+Growth Percentile: {percentiles.get('growth_rate', {}).get('percentile', 'N/A')}th  
+Team Size Percentile: {percentiles.get('team_size', {}).get('percentile', 'N/A')}th
+"""
         
         prompt = f"""
-            Generate a professional investment deal note for {company_name} based on the analysis below.
+You are a senior investment partner preparing a comprehensive deal note for {company_name}. Write a detailed investment analysis.
 
-            COMPANY OVERVIEW:
-            - Name: {company_name}
-            - Sector: {sector}
-            - Stage: {stage}
-            - Overall Score: {overall_score:.1f}/10
-            - Recommendation: {recommendation_tier}
+COMPANY DATA:
+- Name: {company_name}
+- Sector: {sector} 
+- Stage: {stage}
+- Investment Score: {overall_score:.1f}/10
+- Recommendation: {recommendation_tier}
+- Risk Score: {risk_score:.1f}/10
 
-            STARTUP DATA (key metrics):
-            {startup_data_str}
+KEY METRICS:
+{startup_data_str}
 
-            RISK ASSESSMENT:
-            - Overall Risk Score: {risk_score:.1f}/10
-            - Key Risk Areas: {risk_summary}
+RISK SUMMARY:
+{risk_summary}
 
-            BENCHMARKING RESULTS:
-            {benchmark_str}
+BENCHMARKS:
+{benchmark_str}
 
-            Please generate a structured deal note with these exact sections:
+Write a comprehensive deal note with these sections:
 
-            **EXECUTIVE SUMMARY**
-            3-4 sentences covering the investment opportunity, key strengths, and recommendation.
+# Investment Committee Deal Note: {company_name}
 
-            **INVESTMENT THESIS**
-            3 bullet points highlighting the main reasons to invest or pass.
+## Executive Summary
+Write 4-5 sentences covering the investment opportunity, key strengths, market position, and recommendation with rationale.
 
-            **KEY METRICS**
-            Financial highlights and important business metrics.
+## Investment Thesis
+• **Market Opportunity**: Analyze market size, growth, and timing
+• **Competitive Position**: Assess differentiation and competitive moats  
+• **Team & Execution**: Evaluate founder/team capabilities
+• **Financial Performance**: Review metrics, unit economics, growth
+• **Strategic Value**: Consider exit potential and returns
 
-            **MARKET OPPORTUNITY**
-            Market size, growth potential, and competitive landscape.
+## Financial Analysis
+- **Revenue**: Current revenue and growth trajectory
+- **Unit Economics**: CAC, LTV, gross margins, payback periods
+- **Burn & Runway**: Monthly burn rate and runway analysis
+- **Funding**: Previous rounds, current needs, use of funds
+- **Projections**: Assessment of financial forecasts
 
-            **TEAM ASSESSMENT**
-            Founder and team evaluation.
+## Market Assessment  
+- **TAM/SAM**: Market size and addressable opportunity
+- **Growth Drivers**: Key market trends and catalysts
+- **Competition**: Competitive landscape and positioning
+- **Market Timing**: Adoption curve and market readiness
 
-            **PRODUCT/TECHNOLOGY**
-            Product differentiation and development stage.
+## Team Evaluation
+- **Founders**: Background, experience, and track record
+- **Team Composition**: Key roles, expertise, and gaps
+- **Execution Capability**: Evidence of ability to scale
+- **Advisory Support**: Board and advisor strength
 
-            **RISK FACTORS**
-            Top 3 risks with brief mitigation strategies.
+## Product & Technology
+- **Product-Market Fit**: Evidence of customer validation
+- **Differentiation**: Competitive advantages and IP
+- **Development Stage**: Current status and roadmap
+- **Scalability**: Platform potential and technical risks
 
-            **BENCHMARKING INSIGHTS**
-            How this company compares to sector peers.
+## Traction Analysis
+- **Customer Metrics**: Acquisition, retention, satisfaction
+- **Growth Trends**: User/revenue growth patterns
+- **Partnerships**: Strategic relationships and distribution
+- **Market Validation**: Customer testimonials and case studies
 
-            **RECOMMENDATION**
-            Clear Pass/Consider/Pursue decision with 2-3 sentence rationale.
+## Risk Assessment
+Identify and analyze the top 5 investment risks:
+1. **[Risk Category]**: Description, likelihood, impact, mitigation
+2. **[Risk Category]**: Description, likelihood, impact, mitigation  
+3. **[Risk Category]**: Description, likelihood, impact, mitigation
+4. **[Risk Category]**: Description, likelihood, impact, mitigation
+5. **[Risk Category]**: Description, likelihood, impact, mitigation
 
-            **NEXT STEPS**
-            3-5 specific actionable items for further due diligence.
+## Benchmarking Insights
+- **Sector Performance**: How company compares to {sector} peers
+- **Percentile Rankings**: Key metrics vs industry benchmarks
+- **Competitive Analysis**: Strengths and weaknesses vs competitors
+- **Valuation Context**: Multiple analysis and pricing assessment
 
-            Keep the total response under 1500 words. Be concise but comprehensive.
-        """
+## Investment Recommendation
+**Decision**: {recommendation_tier}
+
+**Rationale**: Provide 3-4 sentences explaining the recommendation based on:
+- Investment attractiveness and return potential
+- Risk-adjusted opportunity assessment  
+- Strategic fit and portfolio considerations
+- Market timing and competitive dynamics
+
+**Investment Terms** (if PURSUE):
+- Suggested investment size and ownership target
+- Key terms and structure preferences
+- Board participation and governance
+
+## Due Diligence Priorities
+1. **Financial DD**: Revenue validation, unit economics verification
+2. **Technical DD**: Product architecture, IP assessment, scalability
+3. **Market DD**: Customer references, competitive analysis
+4. **Team DD**: Reference checks, cultural assessment
+5. **Legal DD**: Corporate structure, compliance, contracts
+
+## Next Steps
+- [ ] Schedule management presentation
+- [ ] Conduct customer reference calls  
+- [ ] Technical architecture review
+- [ ] Financial model validation
+- [ ] Competitive landscape deep dive
+- [ ] Investment committee presentation
+
+REQUIREMENTS:
+- Be specific with numbers, percentages, and quantitative analysis
+- Use professional VC terminology and frameworks
+- Provide actionable insights and clear reasoning
+- Include both positive and negative aspects objectively
+- Write 1500-2500 words with detailed analysis
+- Use markdown formatting for structure and readability
+"""
         
         # Ensure prompt doesn't exceed length limit
         if len(prompt) > self.config.max_prompt_length:
