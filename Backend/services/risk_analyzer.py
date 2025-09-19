@@ -67,8 +67,7 @@ class RiskAnalyzer:
                     risks[category] = [{
                         'type': 'analysis_error',
                         'severity': 5,
-                        'details': f'Error analyzing {category} risks: {str(result)}',
-                        'impact': 'medium'
+                        'details': f'Error analyzing {category} risks: {str(result)}'
                     }]
                 else:
                     risks[category] = result
@@ -204,9 +203,6 @@ class RiskAnalyzer:
                     'impact': 'medium'
                 })
         
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
-
         except Exception as e:
             logger.error(f"Financial risk analysis error: {e}")
             risks.append({
@@ -279,9 +275,6 @@ class RiskAnalyzer:
                     'details': "Target market definition is unclear or too broad",
                     'impact': 'medium'
                 })
-    
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
             
         except Exception as e:
             logger.error(f"Market risk analysis error: {e}")
@@ -372,10 +365,7 @@ class RiskAnalyzer:
                     'details': "No key hires identified despite team size - may indicate weak talent acquisition",
                     'impact': 'low'
                 })
-
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
-
+            
         except Exception as e:
             logger.error(f"Team risk analysis error: {e}")
             risks.append({
@@ -438,10 +428,7 @@ class RiskAnalyzer:
                     'details': "Business model is unclear or not well defined",
                     'impact': 'medium'
                 })
-
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
-
+            
         except Exception as e:
             logger.error(f"Product risk analysis error: {e}")
             risks.append({
@@ -496,8 +483,8 @@ class RiskAnalyzer:
                         'impact': 'low'
                     })
             
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
+            # Advanced AI-powered operational risk analysis
+            await self._ai_operational_risk_analysis(data, risks)
             
         except Exception as e:
             logger.error(f"Operational risk analysis error: {e}")
@@ -510,9 +497,9 @@ class RiskAnalyzer:
         
         return risks
 
-    async def _ai_risk_analysis(self, data: Dict, risks: List[Dict]) -> None:
-        """Use Gemini AI for advanced risk pattern detection"""
-
+    async def _ai_operational_risk_analysis(self, data: Dict, risks: List[Dict]) -> None:
+        """Use Gemini AI for advanced operational risk pattern detection"""
+        
         try:
             # Prepare data for AI analysis (limit size)
             analysis_data = json.dumps(data, indent=2)[:4000]

@@ -95,7 +95,7 @@ class DocumentProcessor:
         return f"gs://{blob.bucket.name}/{blob.name}"
 
 
-    async def call_gemini_with_file(self, file_uris: list[str], prompt_text: str) -> Dict:
+    async def call_gemini_with_file(self, file_uris: list[str], prompt_text: str) -> str:
         # Build contents list: prompt first
         contents = [prompt_text]
 
@@ -251,7 +251,7 @@ class DocumentProcessor:
             "team": {
                 "size": "total team size including founders (number only, null if not found)",
                 "founders": ["founder names with titles and brief background"],
-                "key_hires": ["key team members with roles and experience"],
+                "key_personnel": ["key team members with roles and experience"],
                 "advisors": ["advisory board members and their backgrounds"],
                 "hiring_plan": ["key positions planning to hire"],
                 "team_experience": "summary of team's relevant experience and expertise"
