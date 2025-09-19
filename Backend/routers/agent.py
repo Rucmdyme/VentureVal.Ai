@@ -9,6 +9,7 @@ import asyncio
 from models.schemas import ChatRequest, ChatResponse
 from models.database import get_firestore_client
 from utils.ai_client import monitor_usage, configure_gemini
+from settings import PROJECT_ID, GCP_REGION
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 logger = logging.getLogger(__name__)
@@ -181,8 +182,8 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
             configure_gemini()
             model = genai.Client(
                 vertexai=True,
-                project="ventureval-ef705",
-                location="us-central1"
+                project=PROJECT_ID,
+                location=GCP_REGION
             )
             
             full_prompt = f"{context_prompt}\n\nINVESTOR QUESTION: {question}\n\nANSWER:"

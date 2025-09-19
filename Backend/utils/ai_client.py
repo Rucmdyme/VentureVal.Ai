@@ -7,6 +7,7 @@ from functools import wraps
 from datetime import datetime
 from fastapi import HTTPException
 import logging
+from settings import PROJECT_ID, GCP_REGION
 
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,8 @@ def configure_gemini():
         # TODO: implement better check for if gemini is configured
         client = genai.Client(
             vertexai=True,
-            project="ventureval-ef705",
-            location="us-central1"
+            project=PROJECT_ID,
+            location=GCP_REGION
         )
         _gemini_configured = True
         logger.info("Gemini configured successfully")
