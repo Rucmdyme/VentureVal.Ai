@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import fitz
 from docx import Document
 from PIL import Image
+from settings import PROJECT_ID, GCP_REGION
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,8 @@ class DocumentProcessor:
         if self.gemini_available:
             self.model = genai.Client(
                 vertexai=True,
-                project="ventureval-ef705",
-                location="us-central1"
+                project=PROJECT_ID,
+                location=GCP_REGION
             )
             logger.info("DocumentProcessor initialized with Gemini multimodal support")
         else:

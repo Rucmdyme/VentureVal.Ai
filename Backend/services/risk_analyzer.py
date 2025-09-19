@@ -6,6 +6,7 @@ import json
 import logging
 from google import genai
 from utils.ai_client import configure_gemini
+from settings import PROJECT_ID, GCP_REGION
 
 logger = logging.getLogger(__name__)
 
@@ -596,8 +597,8 @@ class RiskAnalyzer:
             
             model = genai.Client(
                 vertexai=True,
-                project="ventureval-ef705",
-                location="us-central1"
+                project=PROJECT_ID,
+                location=GCP_REGION
             )
             
             response = await asyncio.to_thread(model.models.generate_content, model="gemini-2.5-flash",contents = [prompt])

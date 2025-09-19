@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import asyncio
 from functools import wraps
 from utils.ai_client import configure_gemini
+from settings import PROJECT_ID, GCP_REGION
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,8 @@ class DealNoteGenerator:
             configure_gemini()
             self._model = genai.Client(
                 vertexai=True,
-                project="ventureval-ef705",
-                location="us-central1"
+                project=PROJECT_ID,
+                location=GCP_REGION
             )
             
             logger.info("Google Generative AI initialized successfully")
