@@ -40,7 +40,7 @@ export default function ProgressTracker({ apiProgress, onComplete }) {
 
     const start = progress;
     const end = apiProgress;
-    const duration = end === 100 ? 1000 : 5000; // 1s if 100, else 5s
+    const duration = end === 100 ? 2000 : 10000; // 2s if 100, else 10s
 
     const startTime = Date.now();
 
@@ -156,7 +156,7 @@ export default function ProgressTracker({ apiProgress, onComplete }) {
       <Typography
         sx={{ mt: 4, fontStyle: "italic", color: "#666666", fontSize: 14 }}
       >
-        This usually takes 1–2 minutes depending on document size and complexity
+        This usually takes 2–3 minutes depending on document size and complexity
       </Typography>
     </Container>
   );

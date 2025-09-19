@@ -22,6 +22,7 @@ import {
 } from "../../apiService/venturevalService";
 import UploadButton from "../../components/uploadButton";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 function HomePage() {
   const [weights, setWeights] = useState(PRESETS["Default (Custom)"]);
@@ -45,11 +46,16 @@ function HomePage() {
     uploadRef.current.scrollIntoView({ behavior: "smooth" });
   };
 
-  const pollAnalysisStatus = async (analysis_id, interval = 5000) => {
+  const pollAnalysisStatus = async (analysis_id, interval = 10000) => {
     while (true) {
       try {
         const resp = await getAnalysisData(analysis_id);
         setApiProgress(resp.progress);
+        if (resp.status === "failed") {
+          toast.error("Analysis failed");
+          setShowAnalyzing(false);
+          return null;
+        }
         if (resp.progress === 100) {
           return resp;
         }
@@ -121,7 +127,7 @@ function HomePage() {
   const onAnalysisComplete = () => {
     console.log("Analysis Complete");
   };
-  const adjustedApiProgress = apiProgress === 0 ? 5 : apiProgress;
+  const adjustedApiProgress = apiProgress === 0 ? 10 : apiProgress;
   if (showAnalyzing) {
     return (
       <ProgressTracker

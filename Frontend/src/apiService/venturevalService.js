@@ -4,7 +4,7 @@ import API_SERVICE from "../apiService/apiService";
 const { DOCUMENTS, ANALYSIS } = API_SERVICE;
 const {
   DOCUMENTS: { PRESIGNED_URL },
-  ANALYSIS: { START, ANALYSIS_STATUS },
+  ANALYSIS: { START },
 } = API_ENDPOINTS;
 
 export const getPresignedUrl = (body = {}) => {
