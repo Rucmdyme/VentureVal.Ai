@@ -44,22 +44,22 @@ export const PRESETS = {
 export const factors = [
   {
     key: "growth_potential",
-    label: "growth_potential Potential",
+    label: "Growth Potential",
     color: "#2979ff",
   },
   {
     key: "market_opportunity",
-    label: "market_opportunity Opportunity",
+    label: "Market Opportunity",
     color: "#2979ff",
   },
   {
     key: "team_quality",
-    label: "team_quality Quality",
+    label: "Team Quality",
     color: "#2979ff",
   },
   {
     key: "product_technology",
-    label: "product_technology/Technology",
+    label: "Product/Technology",
     color: "#2979ff",
   },
   {

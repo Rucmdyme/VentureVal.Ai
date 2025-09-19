@@ -15,22 +15,51 @@ import { materialTypes, whatYouWllGet } from "./constants";
 import { PRESETS } from "../../components/weightSection/constants";
 import { getMuiIcons } from "../../components/getMuiIcons";
 import ProgressTracker from "./progressTracker";
+import {
+  getAnalysisData,
+  getPresignedUrl,
+  startAnalysis,
+} from "../../apiService/venturevalService";
+import UploadButton from "../../components/uploadButton";
+import { useNavigate } from "react-router-dom";
 
 function HomePage() {
   const [weights, setWeights] = useState(PRESETS["Default (Custom)"]);
   const [preset, setPreset] = useState("Default (Custom)");
+  const [apiProgress, setApiProgress] = useState(0);
   const [selectedFiles, setSelectedFiles] = useState({
-    pitchDeck: [],
-    callTranscript: [],
-    founderUpdate: [],
-    emailComm: [],
+    pitch_deck: [],
+    call_transcript: [],
+    founder_update: [],
+    email_communication: [],
   });
   const [showAnalyzing, setShowAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const navigate = useNavigate();
   const uploadRef = useRef(null);
+  const isDisabled =
+    uploading ||
+    Object.values(selectedFiles).every((files) => files.length === 0);
 
   const handleScroll = () => {
     uploadRef.current.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const pollAnalysisStatus = async (analysis_id, interval = 5000) => {
+    while (true) {
+      try {
+        const resp = await getAnalysisData(analysis_id);
+        setApiProgress(resp.progress);
+        if (resp.progress === 100) {
+          return resp;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, interval));
+      } catch (err) {
+        console.error("Polling error:", err);
+        throw err;
+      }
+    }
   };
 
   const handleFileChange = (key, files) => {
@@ -43,25 +72,63 @@ function HomePage() {
       return;
     }
     setUploading(true);
-    // const uniqueId = uuidv4();
-    // const uploadPromises = Object.entries(selectedFiles).map(([key, file]) => {
-    //   if (file?.length) {
-    //     const fileData = file[0];
-    //     const fileRef = ref(
-    //       storage,
-    //       `Deal Material/${uniqueId}/${key}-${fileData.name}`
-    //     );
-    //     return uploadBytes(fileRef, fileData);
-    //   }
-    //   return null;
-    // });
 
+    const uploadPromises = Object.entries(selectedFiles).map(
+      async ([key, files]) => {
+        if (files.length === 0) return null;
+
+        const file = files[0];
+        const resp = await getPresignedUrl({
+          filename: file.name,
+          content_type: file.type,
+          file_type: key,
+        });
+
+        const uploaded = await fetch(resp.signed_url, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+
+        if (uploaded.ok) {
+          return resp.storage_path;
+        } else {
+          return null;
+        }
+      }
+    );
+    const results = await Promise.all(uploadPromises);
     setUploading(false);
     setShowAnalyzing(true);
-  };
+    const normalizedWeights = Object.fromEntries(
+      Object.entries(weights).map(([key, val]) => [key, val / 100])
+    );
+    const storagePaths = results.filter(Boolean);
+    const analysisDetails = await startAnalysis({
+      storage_paths: storagePaths,
+      weighting_config: {
+        profile_name: preset,
+        weights: normalizedWeights,
+      },
+    });
+    const analysis_id = analysisDetails.analysis_id;
 
+    const finalAnalysis = await pollAnalysisStatus(analysis_id);
+    navigate("/dashboard");
+
+    console.log("Final Analysis Result:", finalAnalysis);
+  };
+  const onAnalysisComplete = () => {
+    console.log("Analysis Complete");
+  };
+  const adjustedApiProgress = apiProgress === 0 ? 5 : apiProgress;
   if (showAnalyzing) {
-    return <ProgressTracker />;
+    return (
+      <ProgressTracker
+        apiProgress={adjustedApiProgress}
+        onComplete={onAnalysisComplete}
+      />
+    );
   }
 
   return (
@@ -191,15 +258,11 @@ function HomePage() {
         </Box>
 
         <Box textAlign="center">
-          <Button
-            variant="contained"
-            size="large"
-            sx={{ borderRadius: 2, bgcolor: "#2979ff" }}
-            onClick={handleUpload}
-            disabled={uploading}
-          >
-            {uploading ? "Uploading documents..." : "Get Deal Notes"}
-          </Button>
+          <UploadButton
+            uploading={uploading}
+            handleUpload={handleUpload}
+            isDisabled={isDisabled}
+          />
         </Box>
       </Box>
 

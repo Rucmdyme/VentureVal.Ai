@@ -2,12 +2,12 @@ export const SERVICES = [
   {
     service_key: "api/documents",
     service_name: "DOCUMENTS",
-    baseURL: "http://localhost:8000",
+    baseURL: `${import.meta.env.VITE_API_URL}`,
   },
   {
     service_key: "api/analysis",
     service_name: "ANALYSIS",
-    baseURL: "http://localhost:8000",
+    baseURL: `${import.meta.env.VITE_API_URL}`,
   },
 ];
 
@@ -17,5 +17,6 @@ export const API_ENDPOINTS = {
   },
   ANALYSIS: {
     START: "/start",
+    ANALYSIS_STATUS: "/",
   },
 };

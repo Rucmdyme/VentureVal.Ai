@@ -12,9 +12,9 @@ import CloseIcon from "@mui/icons-material/Close";
 
 function FileUpload({
   uploadKey,
-  formats,
-  files = [],
   onFileChange,
+  formats = ".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png",
+  files = [],
   maxFiles = 1,
 }) {
   const inputId = `fileInput-${uploadKey}`;

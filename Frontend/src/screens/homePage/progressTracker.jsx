@@ -12,14 +12,14 @@ import {
 import { CheckCircle } from "@mui/icons-material";
 import { processingSteps } from "./constants";
 
-export default function ProgressTracker({ onComplete }) {
-  const [progress, setProgress] = useState(0);
-  const [currentStep, setCurrentStep] = useState(0);
+/**
+ * ProgressTracker is controlled by polling from parent.
+ * @param {number} apiProgress - Latest progress value from API (0-100).
+ * @param {function} onComplete - Callback fired when progress hits 100.
+ */
 
-  const totalDuration = processingSteps.reduce(
-    (sum, step) => sum + step.duration,
-    0
-  );
+export default function ProgressTracker({ apiProgress, onComplete }) {
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -34,38 +34,38 @@ export default function ProgressTracker({ onComplete }) {
     };
   }, []);
 
+  // animate from previous -> apiProgress
   useEffect(() => {
+    if (apiProgress === undefined || apiProgress === null) return;
+
+    const start = progress;
+    const end = apiProgress;
+    const duration = end === 100 ? 1000 : 5000; // 1s if 100, else 5s
+
     const startTime = Date.now();
 
-    const interval = setInterval(() => {
+    const animate = () => {
       const elapsed = Date.now() - startTime;
-      const newProgress = Math.min((elapsed / totalDuration) * 100, 100);
-      setProgress(newProgress);
+      const t = Math.min(elapsed / duration, 1); // 0 → 1
+      const value = start + (end - start) * t;
+      setProgress(value);
 
-      let accumulated = 0;
-      for (let i = 0; i < processingSteps.length; i++) {
-        accumulated += processingSteps[i].duration;
-        if (elapsed < accumulated) {
-          setCurrentStep(i);
-          break;
-        }
-        if (i === processingSteps.length - 1) {
-          setCurrentStep(processingSteps.length - 1);
-        }
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else if (end === 100 && onComplete) {
+        onComplete();
       }
+    };
 
-      if (elapsed >= totalDuration) {
-        clearInterval(interval);
-        setProgress(100);
-        setCurrentStep(processingSteps.length - 1);
-        if (onComplete) onComplete();
-      }
-    }, 100);
+    animate();
+  }, [apiProgress]);
 
-    return () => clearInterval(interval);
-  }, [totalDuration, onComplete]);
-
-  const currentStepData = processingSteps[currentStep];
+  // Determine current step based on progress ranges
+  const stepIndex = Math.min(
+    Math.floor(progress / (100 / processingSteps.length)),
+    processingSteps.length - 1
+  );
+  const currentStepData = processingSteps[stepIndex];
   const CurrentStepIcon = currentStepData?.icon || CheckCircle;
 
   return (
@@ -127,11 +127,11 @@ export default function ProgressTracker({ onComplete }) {
         <Typography sx={{ fontWeight: 500, mb: 2, fontSize: 18 }}>
           Processing Pipeline
         </Typography>
-        <Stepper activeStep={currentStep} alternativeLabel>
+        <Stepper activeStep={stepIndex} alternativeLabel>
           {processingSteps.map((step, index) => {
             const StepIcon = step.icon;
-            const isComplete = index < currentStep;
-            const isActive = index === currentStep;
+            const isComplete = index < stepIndex;
+            const isActive = index === stepIndex;
 
             return (
               <Step key={step.id}>
@@ -156,7 +156,7 @@ export default function ProgressTracker({ onComplete }) {
       <Typography
         sx={{ mt: 4, fontStyle: "italic", color: "#666666", fontSize: 14 }}
       >
-        This usually takes 2–3 minutes depending on document size and complexity
+        This usually takes 1–2 minutes depending on document size and complexity
       </Typography>
     </Container>
   );
