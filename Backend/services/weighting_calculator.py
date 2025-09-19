@@ -2,6 +2,8 @@
 
 # services/weighting_calculator.py
 from typing import Dict, List
+from utils.helpers import update_progress
+
 
 class WeightingCalculator:
     def __init__(self):
@@ -55,7 +57,7 @@ class WeightingCalculator:
         
         return presets.get(profile, cls().default_weights)
 
-    async def calculate_weighted_score(self, startup_data: Dict, risk_assessment: Dict, 
+    async def calculate_weighted_score(self, analysis_id: str, startup_data: Dict, risk_assessment: Dict, 
                                      benchmark_results: Dict, weighting_config: Dict) -> Dict:
         """Apply custom weightings to generate final scores"""
         
@@ -66,6 +68,8 @@ class WeightingCalculator:
             raise ValueError("Weights must sum to 100%")
         
         # Calculate dimension scores (1-10 scale)
+        # TODO: error handling and updates in db for analysis (maybe in different collection)
+        # await update_progress(analysis_id, analyzing_DSFCDS = "kjhfguierhgfiluheriljfhervioer")
         dimension_scores = {
             'growth_potential': self.calculate_growth_score(startup_data, benchmark_results),
             'market_opportunity': self.calculate_market_score(startup_data),

@@ -8,9 +8,6 @@ import uvicorn
 import sys
 import os
 from utils.ai_client import cost_monitor
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Add the Backend directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -39,9 +36,9 @@ async def startup_event():
     init_ai_clients()
 
 # Include routers
-app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
-app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
-app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
+app.include_router(analysis.router, prefix="/analysis", tags=["analysis"])
+app.include_router(documents.router, prefix="/documents", tags=["documents"])
+app.include_router(agent.router, prefix="/agent", tags=["agent"])
 
 @app.get("/")
 async def root():

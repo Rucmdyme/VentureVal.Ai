@@ -15,8 +15,7 @@
 # models/database.py
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
-import os
-
+from settings import BUCKET_ID, CRED_PATH
 # Global clients
 firestore_client = None
 storage_bucket = None
@@ -28,15 +27,14 @@ def init_firebase():
     try:
         # Initialize with service account key
         if not firebase_admin._apps:
-            cred_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-            if cred_path:
-                cred = credentials.Certificate(cred_path)
+            if CRED_PATH:
+                cred = credentials.Certificate(CRED_PATH)
             else:
                 # Use default credentials in production
                 cred = credentials.ApplicationDefault()
             
             firebase_admin.initialize_app(cred, {
-                'storageBucket': f"{os.getenv('PROJECT_ID')}.appspot.com"
+                'storageBucket': BUCKET_ID
             })
         
         firestore_client = firestore.client()

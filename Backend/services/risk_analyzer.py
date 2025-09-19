@@ -6,6 +6,7 @@ import json
 import logging
 from google import genai
 from utils.ai_client import configure_gemini
+from settings import PROJECT_ID, GCP_REGION
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class RiskAnalyzer:
             overall_risk = self.calculate_overall_risk(risks)
             
             # Generate risk explanations
-            risk_explanations = await self.generate_risk_explanations(risks, startup_data)
+            risk_explanations = await self.generate_risk_explanations(risks)
             
             # Calculate additional risk metrics
             risk_summary = self.calculate_risk_summary(risks)
@@ -266,7 +267,7 @@ class RiskAnalyzer:
                     })
             
             # Target market analysis
-            target = market.get('target', '')
+            target = market.get('target_segment', '')
             if not target or len(target.strip()) < 20:
                 risks.append({
                     'type': 'unclear_target_market',
@@ -385,13 +386,13 @@ class RiskAnalyzer:
             # Get product data with safe access
             product = data.get('product', {}) or data.get('synthesized_data', {}).get('product', {})
             
-            # Product differentiation analysis
-            differentiation = product.get('differentiation', '')
-            if not differentiation or len(differentiation.strip()) < 30:
+            # Product competitive_advantage analysis
+            competitive_advantage = product.get('competitive_advantage', '')
+            if not competitive_advantage or len(competitive_advantage.strip()) < 30:
                 risks.append({
-                    'type': 'unclear_differentiation',
+                    'type': 'competitive_advantage_unclear',
                     'severity': 6,
-                    'details': "Product differentiation is unclear or poorly defined",
+                    'details': "Product competitive advantage is unclear or poorly defined",
                     'impact': 'medium'
                 })
             
@@ -504,40 +505,100 @@ class RiskAnalyzer:
             analysis_data = json.dumps(data, indent=2)[:4000]
             
             prompt = f"""
-            Analyze this startup data for operational risks and inconsistencies. Focus on:
-            
-            1. Data inconsistencies between metrics
-            2. Timeline mismatches
-            3. Unusual patterns that suggest operational issues
-            4. Missing critical operational information
-            5. Unrealistic operational claims
-            
-            Startup data:
+            You are a senior investment analyst conducting comprehensive risk assessment on this startup. Analyze the data for critical investment risks and red flags that could impact returns.
+
+            STARTUP DATA FOR ANALYSIS:
             {analysis_data}
-            
-            Return a JSON array of operational risks. Each risk should have:
-            - type: short identifier for the risk
-            - severity: number from 1-10
-            - details: clear explanation of the risk
-            - impact: 'low', 'medium', 'high', or 'critical'
-            
-            Example format:
+
+            RISK ANALYSIS FRAMEWORK - Identify risks in these categories:
+
+            1. FINANCIAL RED FLAGS:
+               - Unrealistic revenue projections or growth rates (>500% annually)
+               - Burn rate exceeding revenue by >10x
+               - Runway less than 12 months without clear path to profitability
+               - Unit economics that don't make sense (CAC > LTV)
+               - Missing or inconsistent financial data
+               - Funding amounts that don't align with stage or traction
+
+            2. MARKET & COMPETITIVE RISKS:
+               - Inflated market size claims (TAM >$1T without justification)
+               - No identified competitors (suggests poor market research)
+               - Declining or stagnant market growth
+               - Unclear target customer definition
+               - Competitive advantages that are easily replicable
+               - Market timing risks (too early or too late)
+
+            3. TEAM & EXECUTION RISKS:
+               - Single founder without co-founder
+               - Team size misaligned with stage (too small for Series A+)
+               - Lack of relevant industry experience
+               - Missing key roles (CTO for tech company, etc.)
+               - High founder/team turnover
+               - Inexperienced team for complex market
+
+            4. PRODUCT & TECHNOLOGY RISKS:
+               - Product still in concept stage for late-stage funding
+               - Unclear value proposition or differentiation
+               - Technology risks or dependencies
+               - Long development cycles without customer validation
+               - Product-market fit concerns
+               - Scalability limitations
+
+            5. TRACTION & CUSTOMER RISKS:
+               - High user counts but no paying customers
+               - Declining growth rates or user engagement
+               - Customer concentration risk (>50% revenue from few customers)
+               - Poor unit economics or customer retention
+               - Lack of organic growth or high churn
+               - Vanity metrics without business impact
+
+            6. OPERATIONAL & STRATEGIC RISKS:
+               - Unclear go-to-market strategy
+               - Regulatory or compliance risks
+               - Dependency on key partnerships or suppliers
+               - Scalability challenges in operations
+               - Geographic or market expansion risks
+               - Capital efficiency concerns
+
+            7. DATA QUALITY & CONSISTENCY RISKS:
+               - Inconsistent metrics across documents
+               - Missing critical business data
+               - Unrealistic or unsubstantiated claims
+               - Timeline inconsistencies
+               - Conflicting information in different sources
+
+            Return a JSON array of identified risks with detailed analysis:
             [
                 {{
-                    "type": "inconsistent_metrics",
-                    "severity": 7,
-                    "details": "User growth doesn't align with revenue growth patterns",
-                    "impact": "high"
+                    "category": "financial|market|team|product|traction|operational|data_quality",
+                    "type": "specific_risk_identifier",
+                    "severity": "1-10 (10 being deal-breaking)",
+                    "details": "specific explanation of the risk with supporting evidence from data",
+                    "evidence": "exact data points or metrics that support this risk assessment",
+                    "impact": "low|medium|high|critical",
+                    "likelihood": "low|medium|high (probability of risk materializing)",
+                    "mitigation": "potential ways to address or mitigate this risk",
+                    "investor_concern": "why this matters to investors and potential impact on returns"
                 }}
             ]
-            
-            Return only the JSON array, no other text.
+
+            ANALYSIS REQUIREMENTS:
+            1. Only identify risks with clear evidence from the provided data
+            2. Be specific about what makes each item risky (don't use generic statements)
+            3. Quantify risks where possible using actual numbers from the data
+            4. Consider stage-appropriate expectations (seed vs Series A standards)
+            5. Flag any data inconsistencies or missing critical information
+            6. Assess both current risks and future risk potential
+            7. Consider market context and competitive dynamics
+            8. Evaluate management team's ability to execute and scale
+
+            Focus on risks that could significantly impact investment returns or company survival. Return only the JSON array.
             """
             
             model = genai.Client(
                 vertexai=True,
-                project="ventureval-ef705",
-                location="us-central1"
+                project=PROJECT_ID,
+                location=GCP_REGION
             )
             
             response = await asyncio.to_thread(model.models.generate_content, model="gemini-2.5-flash",contents = [prompt])
@@ -639,7 +700,7 @@ class RiskAnalyzer:
             'average_severity': round(avg_severity, 2)
         }
 
-    async def generate_risk_explanations(self, risks: Dict[str, List[Dict]], startup_data: Dict) -> List[str]:
+    async def generate_risk_explanations(self, risks: Dict[str, List[Dict]]) -> List[str]:
         """Generate human-readable risk explanations"""
         
         explanations = []
