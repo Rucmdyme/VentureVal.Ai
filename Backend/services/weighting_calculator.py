@@ -75,7 +75,7 @@ class WeightingCalculator:
             'market_opportunity': self.calculate_market_score(startup_data),
             'team_quality': self.calculate_team_score(startup_data),
             'product_technology': self.calculate_product_score(startup_data),
-            'financial_metrics': self.calculate_financial_score(startup_data),
+            'financial_metrics': self.calculate_financial_score(startup_data, benchmark_results),
             'competitive_position': self.calculate_competitive_score(startup_data)
         }
         
@@ -130,7 +130,7 @@ class WeightingCalculator:
         
         market = data.get('market') or {}
         market_size = market.get('size') or 0
-        target = market.get('target_segment') or ''
+        target = market.get('target') or ''
         competitors = market.get('competitors') or []
         
         score = 5.0  # Base score
@@ -182,7 +182,7 @@ class WeightingCalculator:
     def calculate_product_score(self, data: Dict) -> float:
         product = data.get('product') or {}
         description = product.get('description') or ''
-        competitive_advantage = product.get('competitive_advantage') or ''
+        differentiation = product.get('differentiation') or ''
         stage = product.get('stage') or ''
         
         score = 5.0  # Base score
@@ -191,10 +191,10 @@ class WeightingCalculator:
         if len(description) > 100:
             score += 1.0
         
-        # competitive_advantage clarity
-        if len(competitive_advantage) > 50:
+        # Differentiation clarity
+        if len(differentiation) > 50:
             score += 2.0
-        elif len(competitive_advantage) > 20:
+        elif len(differentiation) > 20:
             score += 1.0
         
         # Development stage
@@ -205,7 +205,7 @@ class WeightingCalculator:
     
         return min(10.0, max(1.0, score))
 
-    def calculate_financial_score(self, data: Dict) -> float:
+    def calculate_financial_score(self, data: Dict, benchmarks: Dict) -> float:
         """Calculate financial metrics score"""
         
         financials = data.get('financials') or {}
@@ -233,7 +233,7 @@ class WeightingCalculator:
         
         market = data.get('market') or {}
         competitors = market.get('competitors') or []
-        competitive_advantage = (data.get('product') or {}).get('competitive_advantage') or ''
+        differentiation = (data.get('product') or {}).get('differentiation') or ''
         
         score = 5.0  # Base score
         
@@ -244,11 +244,11 @@ class WeightingCalculator:
             score -= 1.0
         elif len(competitors) == 0:  # Unclear market
             score -= 2.0
-
-        # Competitive advantage strength
-        if len(competitive_advantage) > 100:  # Strong competitive advantage
+        
+        # Differentiation strength
+        if len(differentiation) > 100:  # Strong differentiation
             score += 2.0
-        elif len(competitive_advantage) > 50:
+        elif len(differentiation) > 50:
             score += 1.0
         
         return min(10.0, max(1.0, score))
