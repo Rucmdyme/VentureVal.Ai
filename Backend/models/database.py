@@ -15,7 +15,8 @@
 # models/database.py
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
-from settings import BUCKET_ID, CRED_PATH
+from settings import BUCKET_ID, FIREBASE_CONFIG_JSON
+import json
 # Global clients
 firestore_client = None
 storage_bucket = None
@@ -27,8 +28,8 @@ def init_firebase():
     try:
         # Initialize with service account key
         if not firebase_admin._apps:
-            if CRED_PATH:
-                cred = credentials.Certificate(CRED_PATH)
+            if FIREBASE_CONFIG_JSON:
+                cred = credentials.Certificate(json.loads(FIREBASE_CONFIG_JSON))
             else:
                 # Use default credentials in production
                 cred = credentials.ApplicationDefault()
