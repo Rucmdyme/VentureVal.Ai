@@ -1,6 +1,7 @@
 # routers/agent.py
 from fastapi import APIRouter, HTTPException
 from google import genai
+from google.genai import types
 from typing import List, Dict, Any
 import json
 import logging
@@ -188,24 +189,23 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
             
             full_prompt = f"{context_prompt}\n\nINVESTOR QUESTION: {question}\n\nANSWER:"
             
-            generation_config = genai.types.GenerationConfig(
+            generation_config = types.GenerateContentConfig(
                 temperature=0.3,
                 max_output_tokens=1000,
                 top_p=0.8,
-                top_k=40
+                top_k=40,
+                safety_settings=[
+                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_MEDIUM_AND_ABOVE"),
+                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_MEDIUM_AND_ABOVE"),
+                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_MEDIUM_AND_ABOVE"),
+                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_MEDIUM_AND_ABOVE"),
+                ]
             )
             
-            safety_settings = [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-            ]
-            
-            response = model.generate_content(
-                full_prompt,
-                generation_config=generation_config,
-                safety_settings=safety_settings
+            response = model.models.generate_content(
+                model="gemini-2.5-flash",
+                contents = [full_prompt],
+                config=generation_config
             )
             
             return response.text
