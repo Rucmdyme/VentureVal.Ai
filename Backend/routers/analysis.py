@@ -17,6 +17,7 @@ from services.deal_generator import DealNoteGenerator
 from services.weighting_calculator import WeightingCalculator
 from utils.ai_client import monitor_usage
 from utils.helpers import update_progress
+from utils.enhanced_text_cleaner import sanitize_for_frontend, clean_response_dict, clean_response_text
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
             raise ValueError(f"Document processing failed: {str(e)}")
         if not processed_data:
             raise ValueError("Document processing failed - no synthesized data extracted")
-            
+
         if 'error' in processed_data:
             logger.error(f"Document processing error: {processed_data['error']}")
             raise ValueError(f"Document processing failed: {processed_data['error']}")
@@ -266,7 +267,7 @@ async def get_analysis(analysis_id: str):
         
         data = serialize_datetime_fields(data)
         
-        return data
+        return sanitize_for_frontend(data)
         
     except HTTPException:
         raise

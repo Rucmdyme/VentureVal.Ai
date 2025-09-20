@@ -22,7 +22,7 @@ app = FastAPI(title="AI Startup Analyst", version="1.0.0")
 # CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://your-app.web.app"],
+    allow_origins=["http://localhost:5173", "https://ventureval-ef705.web.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
