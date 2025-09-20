@@ -173,15 +173,12 @@ async def build_context_prompt(analysis_data: Dict[str, Any]) -> str:
         benchmarking = analysis_data.get('benchmarking', {})
         benchmark_performance = format_benchmark_performance(benchmarking)
         
-        # Format founders list
+        # Format founders list (stored as strings with titles and backgrounds)
         founders_list = "Not disclosed"
         if team.get('founders'):
             founders = team.get('founders', [])
             if isinstance(founders, list) and founders:
-                founders_list = ', '.join([
-                    f['name'] if isinstance(f, dict) and 'name' in f else str(f) 
-                    for f in founders
-                ])
+                founders_list = '; '.join([str(f) for f in founders])
         
         # Format competitors
         competitors_list = "Not identified"
@@ -190,7 +187,12 @@ async def build_context_prompt(analysis_data: Dict[str, Any]) -> str:
             if isinstance(competitors, list) and competitors:
                 competitors_list = ', '.join(competitors)
         
-        # Build comprehensive context
+        # Extract additional stored data
+        product = synthesized_data.get('product', {})
+        operations = synthesized_data.get('operations', {})
+        funding = synthesized_data.get('funding', {})
+        
+        # Build context using only stored data
         context_prompt = f"""
             You are a senior investment analyst and startup advisor with 15+ years of experience in venture capital. You have conducted a comprehensive analysis of {company_name} and are now answering investor questions with professional expertise.
 
@@ -200,6 +202,7 @@ async def build_context_prompt(analysis_data: Dict[str, Any]) -> str:
             • Stage: {stage}
             • Geography: {geography}
             • Founded: {synthesized_data.get('founded', 'Not disclosed')}
+            • Description: {synthesized_data.get('description', 'Not available')}
 
             INVESTMENT ANALYSIS SUMMARY:
             • Overall Investment Score: {f"{overall_score:.1f}/10" if overall_score is not None else "N/A"}
@@ -207,38 +210,58 @@ async def build_context_prompt(analysis_data: Dict[str, Any]) -> str:
             • Investment Recommendation: {tier}
             • Investment Rationale: {rationale}
 
-            KEY FINANCIAL METRICS:
+            FINANCIAL METRICS (from stored data):
             • Annual Revenue: ${format_currency(financials.get('revenue'))}
             • Monthly Revenue (MRR): ${format_currency(financials.get('monthly_revenue'))}
             • Growth Rate: {format_percentage(financials.get('growth_rate'))} annually
+            • Monthly Growth Rate: {format_percentage(financials.get('monthly_growth_rate'))}
             • Monthly Burn Rate: ${format_currency(financials.get('burn_rate'))}/month
             • Runway: {financials.get('runway_months', 'Not disclosed')} months
             • Total Funding Raised: ${format_currency(financials.get('funding_raised'))}
             • Current Round: ${format_currency(financials.get('funding_seeking'))}
             • Valuation: ${format_currency(financials.get('valuation'))}
             • Gross Margin: {format_percentage(financials.get('gross_margin'))}
+            • CAC: ${format_currency(financials.get('cac'))}
+            • LTV: ${format_currency(financials.get('ltv'))}
+            • LTV/CAC Ratio: {financials.get('ltv_cac_ratio', 'Not disclosed')}
 
-            MARKET & COMPETITIVE POSITION:
+            MARKET DATA (from stored data):
             • Total Addressable Market (TAM): ${format_currency(market.get('size'))}
             • Serviceable Addressable Market (SAM): ${format_currency(market.get('sam'))}
+            • Serviceable Obtainable Market (SOM): ${format_currency(market.get('som'))}
             • Target Customer Segment: {market.get('target_segment', 'Not specified')}
             • Key Competitors: {competitors_list}
             • Market Growth Rate: {format_percentage(market.get('growth_rate'))} annually
             • Competitive Positioning: {market.get('competitive_positioning', 'Not specified')}
 
-            TEAM & TRACTION:
+            TEAM DATA (from stored data):
             • Team Size: {team.get('size', 'Not disclosed')} employees
             • Founders: {founders_list}
-            • Key Personnel: {len(team.get('key_personnel', [])) if team.get('key_personnel') else 0} key roles identified
+            • Key Hires: {len(team.get('key_hires', [])) if team.get('key_hires') else 0} key roles identified
+            • Advisors: {len(team.get('advisors', [])) if team.get('advisors') else 0} advisors
+            • Team Experience: {team.get('team_experience', 'Not specified')}
+
+            TRACTION DATA (from stored data):
             • Paying Customers: {format_number(traction.get('customers'))}
             • Total Users: {format_number(traction.get('users'))}
             • Monthly Active Users: {format_number(traction.get('mau'))}
             • Customer Retention Rate: {format_percentage(traction.get('retention_rate'))}
+            • NPS Score: {traction.get('nps_score', 'Not disclosed')}
+            • Key Partnerships: {len(traction.get('partnerships', [])) if traction.get('partnerships') else 0} partnerships
 
-            PRODUCT & BUSINESS MODEL:
-            • Product Stage: {synthesized_data.get('product', {}).get('stage', 'Not specified')}
-            • Business Model: {synthesized_data.get('product', {}).get('business_model', 'Not specified')}
-            • Competitive Advantage: {synthesized_data.get('product', {}).get('competitive_advantage', 'Not specified')}
+            PRODUCT DATA (from stored data):
+            • Product Name: {product.get('name', 'Not specified')}
+            • Product Stage: {product.get('stage', 'Not specified')}
+            • Business Model: {product.get('business_model', 'Not specified')}
+            • Competitive Advantage: {product.get('competitive_advantage', 'Not specified')}
+            • Technology Stack: {product.get('technology_stack', 'Not specified')}
+            • IP Portfolio: {product.get('intellectual_property', 'Not specified')}
+
+            OPERATIONS DATA (from stored data):
+            • Go-to-Market Strategy: {operations.get('go_to_market', 'Not specified')}
+            • Pricing Strategy: {operations.get('pricing_strategy', 'Not specified')}
+            • Distribution Channels: {len(operations.get('distribution_channels', [])) if operations.get('distribution_channels') else 0} channels
+            • Unit Economics: {operations.get('unit_economics', 'Not specified')}
 
             TOP INVESTMENT RISKS:
             {top_risks_formatted}
@@ -248,15 +271,13 @@ async def build_context_prompt(analysis_data: Dict[str, Any]) -> str:
 
             RESPONSE GUIDELINES:
             1. Answer as an experienced investment professional who has thoroughly analyzed this company
-            2. Reference specific data points from the analysis above
-            3. Provide quantitative insights and sector comparisons where possible
+            2. Reference ONLY the specific data points from the stored analysis above
+            3. If data shows "Not disclosed" or "Not specified", acknowledge this limitation
             4. Be direct and actionable - investors need clear, decisive guidance
-            5. If asked about missing data, acknowledge limitations and suggest what additional information would be valuable
-            6. Frame responses in terms of investment implications and decision-making criteria
-            7. Use professional VC terminology and investment frameworks
-            8. Provide context on how findings compare to sector benchmarks and typical investment criteria
-            9. Consider the company's stage and sector when providing guidance
-            10. Always tie insights back to potential returns, risks, and investment attractiveness
+            5. Frame responses in terms of investment implications and decision-making criteria
+            6. Use professional VC terminology and investment frameworks
+            7. Consider the company's stage and sector when providing guidance
+            8. Always tie insights back to potential returns, risks, and investment attractiveness
         """
                     
         return context_prompt
