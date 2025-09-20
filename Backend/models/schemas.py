@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from enum import Enum
 
 class WeightingConfig(BaseModel):
-    profile_name: str = "custom"
+    profile_name: str = "Default (Custom)"
     weights: Dict[str, float] = Field(
         default={
             "growth_potential": 0.25,
