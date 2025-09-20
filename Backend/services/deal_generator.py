@@ -395,7 +395,7 @@ class DealNoteGenerator:
             {{
             "company_description": "A comprehensive 100-150 word description of the company covering what they do, their business model, target market, key products/services, competitive advantages, and current market position in the {sector} sector.",
             
-            "deal_summary": "A comprehensive 100-150 word summary covering the investment opportunity, key strengths, market position, financial performance, team capabilities, and final recommendation with clear rationale.",
+            "deal_summary": "Generate a deal summary as a JSON array of strings. Each string in the array must be a separate key point and should be between 40 and 60 words long. The array should contain exactly 3 strings. Each string must cover different aspects of the investment opportunity, key strengths, market position, financial performance, team capabilities, and the final recommendation with a clear rationale.",
             
             "positive_insights": [
                 "High revenue growth",
