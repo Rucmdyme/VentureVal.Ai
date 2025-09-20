@@ -33,9 +33,10 @@ def clean_response_text(text: str) -> str:
     text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
     text = re.sub(r'__([^_]+)__', r'\1', text)
     
-    # Remove italic markdown (*text* and _text_)
+    # Remove italic markdown (*text* only, preserve standalone underscores)
     text = re.sub(r'\*([^*]+)\*', r'\1', text)
-    text = re.sub(r'_([^_]+)_', r'\1', text)
+    # Only remove underscores when they're clearly markdown formatting (surrounded by non-underscore chars)
+    text = re.sub(r'(?<!\w)_([^_\s]+)_(?!\w)', r'\1', text)
     
     # Remove strikethrough (~~text~~)
     text = re.sub(r'~~([^~]+)~~', r'\1', text)
@@ -50,7 +51,7 @@ def clean_response_text(text: str) -> str:
     # Remove HTML tags
     text = re.sub(r'<[^>]+>', '', text)
     
-    # Handle various newline formats
+    # Handle various newline formats (preserve regular spaces)
     text = text.replace('\\n', ' ')
     text = text.replace('\n', ' ')
     text = text.replace('\\r', ' ')
@@ -71,11 +72,11 @@ def clean_response_text(text: str) -> str:
     text = text.replace(''', "'")
 
     
-    # Remove extra punctuation artifacts
-    text = re.sub(r'[*_~`#]+', '', text)
+    # Remove extra punctuation artifacts (exclude underscores and preserve spaces)
+    text = re.sub(r'[*~`#]+', '', text)
     
-    # Normalize whitespace
-    text = re.sub(r'\s+', ' ', text)
+    # Normalize excessive whitespace (multiple spaces/tabs to single space, but preserve single spaces)
+    text = re.sub(r'\s{2,}', ' ', text)
     
     # Remove leading/trailing whitespace
     text = text.strip()
