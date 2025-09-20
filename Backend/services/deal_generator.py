@@ -358,7 +358,17 @@ REQUIREMENTS:
                 'revenue': financials.get('revenue') if isinstance(financials, dict) else None,
                 'growth_rate': financials.get('growth_rate') if isinstance(financials, dict) else None,
                 'team_size': startup_data.get('team_size'),
-                'funding_raised': startup_data.get('funding_raised')
+                'funding_raised': startup_data.get('funding_raised'),
+                'geography': startup_data.get('geography'),
+                'founded': startup_data.get('founded'),
+                'description': startup_data.get('description', ''),
+                'monthly_revenue': financials.get('monthly_revenue') if isinstance(financials, dict) else None,
+                'runway_months': financials.get('runway_months') if isinstance(financials, dict) else None,
+                'funding_seeking': financials.get('funding_seeking') if isinstance(financials, dict) else None,
+                'Total Addressable Market (TAM)': (startup_data.get('market') or {}).get('size'),
+                'Serviceable Addressable Market (SAM)': (startup_data.get('market') or {}).get('sam'),
+                'Serviceable Obtainable Market (SOM)': (startup_data.get('market') or {}).get('som'),
+
             },
             'generation_metadata': {
                 'model_used': self.config.model_name,
@@ -389,7 +399,9 @@ REQUIREMENTS:
             'summary_stats': {
                 'sector': startup_data.get('sector', 'Unknown'),
                 'stage': startup_data.get('stage', 'Unknown'),
-                'revenue': startup_data.get('financials', {}).get('revenue') if isinstance(startup_data.get('financials'), dict) else None
+                'revenue': startup_data.get('financials', {}).get('revenue') if isinstance(startup_data.get('financials'), dict) else None,
+                'team_size': startup_data.get('team', {}).get('size') if isinstance(startup_data.get('team'), dict) else None,
+                'funding_raised': startup_data.get('financials', {}).get('funding_raised') if isinstance(startup_data.get('financials'), dict) else None,
             },
             'generation_metadata': {
                 'model_used': 'fallback',
