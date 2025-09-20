@@ -44,7 +44,7 @@ class WeightingCalculator:
         # Calculate weighted score
         weighted_score = 0
         for dimension, score in dimension_scores.items():
-            weighted_contribution = score * weights[dimension] * risk_penalty
+            weighted_contribution = score * weights[dimension]
             weighted_score += weighted_contribution
         
         # Generate recommendation

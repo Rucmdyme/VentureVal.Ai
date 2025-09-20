@@ -7,6 +7,7 @@ import logging
 from google import genai
 from utils.ai_client import configure_gemini
 from settings import PROJECT_ID, GCP_REGION
+from utils.enhanced_text_cleaner import sanitize_for_frontend
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +206,7 @@ class RiskAnalyzer:
                 })
         
             # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
+            await self._ai_risk_analysis(data, risks, "financial")
 
         except Exception as e:
             logger.error(f"Financial risk analysis error: {e}")
@@ -281,7 +282,7 @@ class RiskAnalyzer:
                 })
     
             # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
+            await self._ai_risk_analysis(data, risks, "market")
             
         except Exception as e:
             logger.error(f"Market risk analysis error: {e}")
@@ -374,7 +375,7 @@ class RiskAnalyzer:
                 })
 
             # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
+            await self._ai_risk_analysis(data, risks, "team")
 
         except Exception as e:
             logger.error(f"Team risk analysis error: {e}")
@@ -440,7 +441,7 @@ class RiskAnalyzer:
                 })
 
             # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
+            await self._ai_risk_analysis(data, risks, "product")
 
         except Exception as e:
             logger.error(f"Product risk analysis error: {e}")
@@ -497,7 +498,7 @@ class RiskAnalyzer:
                     })
             
             # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
+            await self._ai_risk_analysis(data, risks, "operational")
             
         except Exception as e:
             logger.error(f"Operational risk analysis error: {e}")
@@ -510,80 +511,120 @@ class RiskAnalyzer:
         
         return risks
 
-    async def _ai_risk_analysis(self, data: Dict, risks: List[Dict]) -> None:
-        """Use Gemini AI for advanced risk pattern detection"""
+    async def _ai_risk_analysis(self, data: Dict, risks: List[Dict], risk_context: str = "comprehensive") -> None:
+        """Use Gemini AI for advanced risk pattern detection with specific context"""
 
         try:
             # Prepare data for AI analysis (limit size)
             analysis_data = json.dumps(data, indent=2)[:4000]
             
+            # Define context-specific risk frameworks
+            risk_frameworks = {
+                "financial": {
+                    "focus": "FINANCIAL RED FLAGS",
+                    "categories": [
+                        "- Unrealistic revenue projections or growth rates (>500% annually)",
+                        "- Burn rate exceeding revenue by >10x", 
+                        "- Runway less than 12 months without clear path to profitability",
+                        "- Unit economics that don't make sense (CAC > LTV)",
+                        "- Missing or inconsistent financial data",
+                        "- Funding amounts that don't align with stage or traction",
+                        "- Cash flow negative with no clear path to profitability",
+                        "- High customer acquisition costs relative to lifetime value",
+                        "- Revenue concentration risk (dependency on few customers)",
+                        "- Unrealistic valuation expectations vs financial performance"
+                    ]
+                },
+                "market": {
+                    "focus": "MARKET & COMPETITIVE RISKS",
+                    "categories": [
+                        "- Inflated market size claims (TAM >$1T without justification)",
+                        "- No identified competitors (suggests poor market research)",
+                        "- Declining or stagnant market growth",
+                        "- Unclear target customer definition",
+                        "- Competitive advantages that are easily replicable",
+                        "- Market timing risks (too early or too late)",
+                        "- Saturated market with established players",
+                        "- Regulatory barriers to market entry",
+                        "- Market size too small to support growth ambitions",
+                        "- Customer adoption challenges or long sales cycles"
+                    ]
+                },
+                "team": {
+                    "focus": "TEAM & EXECUTION RISKS",
+                    "categories": [
+                        "- Single founder without co-founder",
+                        "- Team size misaligned with stage (too small for Series A+)",
+                        "- Lack of relevant industry experience",
+                        "- Missing key roles (CTO for tech company, etc.)",
+                        "- High founder/team turnover",
+                        "- Inexperienced team for complex market",
+                        "- Founder-market fit concerns",
+                        "- Key person dependency risks",
+                        "- Lack of technical expertise for product development",
+                        "- Poor track record of execution or previous failures"
+                    ]
+                },
+                "product": {
+                    "focus": "PRODUCT & TECHNOLOGY RISKS",
+                    "categories": [
+                        "- Product still in concept stage for late-stage funding",
+                        "- Unclear value proposition or differentiation",
+                        "- Technology risks or dependencies",
+                        "- Long development cycles without customer validation",
+                        "- Product-market fit concerns",
+                        "- Scalability limitations",
+                        "- Intellectual property vulnerabilities",
+                        "- Technical debt or architecture issues",
+                        "- Dependency on third-party platforms or APIs",
+                        "- Complex product requiring significant user education"
+                    ]
+                },
+                "operational": {
+                    "focus": "OPERATIONAL & TRACTION RISKS",
+                    "categories": [
+                        "- High user counts but no paying customers",
+                        "- Declining growth rates or user engagement",
+                        "- Customer concentration risk (>50% revenue from few customers)",
+                        "- Poor unit economics or customer retention",
+                        "- Lack of organic growth or high churn",
+                        "- Vanity metrics without business impact",
+                        "- Unclear go-to-market strategy",
+                        "- Regulatory or compliance risks",
+                        "- Dependency on key partnerships or suppliers",
+                        "- Scalability challenges in operations"
+                    ]
+                }
+            }
+            
+            # Get the appropriate framework or use comprehensive analysis
+            if risk_context in risk_frameworks:
+                framework = risk_frameworks[risk_context]
+                focus_area = framework["focus"]
+                risk_categories = "\n".join(framework["categories"])
+                category_filter = risk_context
+            else:
+                # Comprehensive analysis - include all categories
+                focus_area = "COMPREHENSIVE RISK ASSESSMENT"
+                all_categories = []
+                for fw in risk_frameworks.values():
+                    all_categories.extend(fw["categories"])
+                risk_categories = "\n".join(all_categories)
+                category_filter = "financial|market|team|product|operational|data_quality"
+            
             prompt = f"""
-            You are a senior investment analyst conducting comprehensive risk assessment on this startup. Analyze the data for critical investment risks and red flags that could impact returns.
+            You are a senior investment analyst conducting {focus_area.lower()} on this startup. Analyze the data for critical investment risks and red flags that could impact returns.
 
             STARTUP DATA FOR ANALYSIS:
             {analysis_data}
 
-            RISK ANALYSIS FRAMEWORK - Identify risks in these categories:
-
-            1. FINANCIAL RED FLAGS:
-               - Unrealistic revenue projections or growth rates (>500% annually)
-               - Burn rate exceeding revenue by >10x
-               - Runway less than 12 months without clear path to profitability
-               - Unit economics that don't make sense (CAC > LTV)
-               - Missing or inconsistent financial data
-               - Funding amounts that don't align with stage or traction
-
-            2. MARKET & COMPETITIVE RISKS:
-               - Inflated market size claims (TAM >$1T without justification)
-               - No identified competitors (suggests poor market research)
-               - Declining or stagnant market growth
-               - Unclear target customer definition
-               - Competitive advantages that are easily replicable
-               - Market timing risks (too early or too late)
-
-            3. TEAM & EXECUTION RISKS:
-               - Single founder without co-founder
-               - Team size misaligned with stage (too small for Series A+)
-               - Lack of relevant industry experience
-               - Missing key roles (CTO for tech company, etc.)
-               - High founder/team turnover
-               - Inexperienced team for complex market
-
-            4. PRODUCT & TECHNOLOGY RISKS:
-               - Product still in concept stage for late-stage funding
-               - Unclear value proposition or differentiation
-               - Technology risks or dependencies
-               - Long development cycles without customer validation
-               - Product-market fit concerns
-               - Scalability limitations
-
-            5. TRACTION & CUSTOMER RISKS:
-               - High user counts but no paying customers
-               - Declining growth rates or user engagement
-               - Customer concentration risk (>50% revenue from few customers)
-               - Poor unit economics or customer retention
-               - Lack of organic growth or high churn
-               - Vanity metrics without business impact
-
-            6. OPERATIONAL & STRATEGIC RISKS:
-               - Unclear go-to-market strategy
-               - Regulatory or compliance risks
-               - Dependency on key partnerships or suppliers
-               - Scalability challenges in operations
-               - Geographic or market expansion risks
-               - Capital efficiency concerns
-
-            7. DATA QUALITY & CONSISTENCY RISKS:
-               - Inconsistent metrics across documents
-               - Missing critical business data
-               - Unrealistic or unsubstantiated claims
-               - Timeline inconsistencies
-               - Conflicting information in different sources
+            RISK ANALYSIS FOCUS - {focus_area}:
+            {risk_categories}
 
             Return a JSON array of identified risks with detailed analysis:
             [
                 {{
-                    "category": "financial|market|team|product|traction|operational|data_quality",
+                    "category": "{category_filter}",
                     "type": "specific_risk_identifier",
                     "severity": "1-10 (10 being deal-breaking)",
                     "details": "specific explanation of the risk with supporting evidence from data",
@@ -596,16 +637,15 @@ class RiskAnalyzer:
             ]
 
             ANALYSIS REQUIREMENTS:
-            1. Only identify risks with clear evidence from the provided data
-            2. Be specific about what makes each item risky (don't use generic statements)
-            3. Quantify risks where possible using actual numbers from the data
-            4. Consider stage-appropriate expectations (seed vs Series A standards)
-            5. Flag any data inconsistencies or missing critical information
-            6. Assess both current risks and future risk potential
-            7. Consider market context and competitive dynamics
-            8. Evaluate management team's ability to execute and scale
+            1. ONLY analyze risks related to {focus_area.lower()}
+            2. Only identify risks with clear evidence from the provided data
+            3. Be specific about what makes each item risky (don't use generic statements)
+            4. Quantify risks where possible using actual numbers from the data
+            5. Consider stage-appropriate expectations (seed vs Series A standards)
+            6. Flag any data inconsistencies or missing critical information
+            7. Focus on risks that could significantly impact investment returns or company survival
 
-            Focus on risks that could significantly impact investment returns or company survival. Return only the JSON array.
+            Return only the JSON array with risks specifically related to {focus_area.lower()}.
             """
             
             model = genai.Client(
@@ -635,12 +675,12 @@ class RiskAnalyzer:
                                 risk['impact'] = 'medium'
                             risks.append(risk)
                     
-                    logger.info(f"AI identified {len(ai_risks)} operational risks")
+                    logger.info(f"AI identified {len(ai_risks)} {risk_context} risks")
         
         except json.JSONDecodeError as e:
-            logger.warning(f"Could not parse AI operational risk response: {e}")
+            logger.warning(f"Could not parse AI {risk_context} risk response: {e}")
         except Exception as e:
-            logger.warning(f"AI operational risk analysis failed: {e}")
+            logger.warning(f"AI {risk_context} risk analysis failed: {e}")
             # Don't add error to risks since this is supplementary analysis
 
     def calculate_overall_risk(self, risks: Dict[str, List[Dict]]) -> float:
