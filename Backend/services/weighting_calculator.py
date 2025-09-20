@@ -15,47 +15,6 @@ class WeightingCalculator:
             'financial_metrics': 0.10,
             'competitive_position': 0.10
         }
-    
-    @classmethod
-    def get_preset_weights(cls, profile: str) -> Dict[str, float]:
-        """Get preset weighting profiles"""
-        
-        presets = {
-            'early_stage_vc': {
-                'team_quality': 0.35,
-                'market_opportunity': 0.30,
-                'product_technology': 0.20,
-                'growth_potential': 0.10,
-                'financial_metrics': 0.03,
-                'competitive_position': 0.02
-            },
-            'growth_equity': {
-                'growth_potential': 0.40,
-                'financial_metrics': 0.25,
-                'market_opportunity': 0.15,
-                'competitive_position': 0.10,
-                'team_quality': 0.08,
-                'product_technology': 0.02
-            },
-            'angel_investor': {
-                'team_quality': 0.30,
-                'product_technology': 0.25,
-                'market_opportunity': 0.20,
-                'growth_potential': 0.15,
-                'financial_metrics': 0.05,
-                'competitive_position': 0.05
-            },
-            'strategic_investor': {
-                'product_technology': 0.35,
-                'competitive_position': 0.25,
-                'market_opportunity': 0.20,
-                'growth_potential': 0.10,
-                'team_quality': 0.07,
-                'financial_metrics': 0.03
-            }
-        }
-        
-        return presets.get(profile, cls().default_weights)
 
     async def calculate_weighted_score(self, analysis_id: str, startup_data: Dict, risk_assessment: Dict, 
                                      benchmark_results: Dict, weighting_config: Dict) -> Dict:
