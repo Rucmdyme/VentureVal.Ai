@@ -1,234 +1,150 @@
 import React, { useState } from "react";
-import {
-  Box,
-  Typography,
-  Button,
-  Card,
-  CardContent,
-  Grid,
-  Chip,
-  Divider,
-  Tabs,
-  Tab,
-} from "@mui/material";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
+import { Box, Typography, Button, Grid, Chip, Stack } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
-
-// Dummy Data
-const revenueData = [
-  { month: "Jan", revenue: 45000 },
-  { month: "Feb", revenue: 50000 },
-  { month: "Mar", revenue: 60000 },
-  { month: "Apr", revenue: 72000 },
-  { month: "May", revenue: 85000 },
-  { month: "Jun", revenue: 100000 },
-];
-
-const marketData = [
-  { name: "Serviceable Obtainable Market", value: 35 },
-  { name: "Serviceable Addressable Market", value: 15000 },
-  { name: "Total Addressable Market", value: 50000 },
-];
-
-const COLORS = ["#4CAF50", "#7E57C2", "#42A5F5"];
+import { ArrowBack } from "@mui/icons-material";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import EventIcon from "@mui/icons-material/Event";
+import InvestmentScore from "../../components/investmentScore";
+import CustomTabs from "../../components/customTabs";
+import { tabsConfig } from "./constant";
+import {
+  marketData,
+  revenueData,
+} from "../../components/dealSummary/constants";
+import DealNoteSummary from "../../components/dealSummary/dealSummary";
+import { useNavigate } from "react-router-dom";
+import BenchmarkingTable from "../../components/dealSummary/benchmarking/benchmarking";
 
 export default function Dashboard() {
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState("summary");
+  const navigate = useNavigate();
 
   return (
-    <Box sx={{ p: 3, bgcolor: "#F9FAFB", minHeight: "100vh" }}>
-      {/* Header */}
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={3}
-      >
-        <Typography variant="h5" fontWeight="bold">
-          TechStart AI
-        </Typography>
-        <Button variant="outlined" startIcon={<DownloadIcon />}>
-          Download PDF
+    <Box sx={{ p: 2, background: "#fafafa" }}>
+      <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+        <ArrowBack
+          sx={{ mr: 1, cursor: "pointer", fontSize: 18 }}
+          onClick={() => navigate("/")}
+        />
+        <Typography>Back to Upload</Typography>
+        <Button
+          sx={{
+            ml: "auto",
+            bgcolor: "black",
+            color: "white",
+            borderRadius: 2,
+            textTransform: "none",
+          }}
+          size="small"
+          variant="outlined"
+          startIcon={<DownloadIcon />}
+        >
+          Download Report
         </Button>
       </Box>
-
-      {/* Score + Company Info */}
-      <Grid container spacing={2} mb={3}>
-        <Grid item xs={12} md={3}>
-          <Card sx={{ bgcolor: "#E3F2FD" }}>
-            <CardContent>
-              <Typography variant="h4" fontWeight="bold" color="primary">
-                8.2 / 10
+      <Box
+        sx={{
+          mb: 3,
+          backgroundImage: "linear-gradient(to right,#e9f2ff,#dce9ff)",
+          borderRadius: 4,
+          border: "1px solid #b3ccef",
+          p: 2,
+        }}
+      >
+        <Grid container spacing={2}>
+          <Grid item size={{ xs: 12, md: 8.5 }}>
+            <Box>
+              <Typography sx={{ fontSize: 24, fontWeight: 600, mb: 0.5 }}>
+                TechStart AI
               </Typography>
-              <Chip label="PURSUE" color="success" sx={{ mt: 1 }} />
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                Investment Recommendation
-              </Typography>
-            </CardContent>
-          </Card>
+              <Stack direction="row" spacing={1}>
+                <Chip
+                  size="small"
+                  label="AI-Powered SaaS Platform"
+                  variant="outlined"
+                  sx={{
+                    color: "rgba(156, 39, 176, 1)",
+                    borderColor: "rgba(156, 39, 176, 0.5)",
+                    backgroundColor: "rgba(156, 39, 176, 0.04)",
+                  }}
+                />
+                <Chip
+                  size="small"
+                  label="Series A"
+                  variant="outlined"
+                  sx={{
+                    color: "rgba(156, 39, 176, 1)",
+                    borderColor: "rgba(156, 39, 176, 0.5)",
+                    backgroundColor: "rgba(156, 39, 176, 0.04)",
+                  }}
+                />
+              </Stack>
+              <Stack
+                direction="row"
+                spacing={3}
+                alignItems="center"
+                sx={{ color: "#444444", fontSize: 14, my: 1 }}
+              >
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <LocationOnIcon sx={{ fontSize: 18 }} />
+                  <Typography variant="body2">Bangalore, India</Typography>
+                </Stack>
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <EventIcon sx={{ fontSize: 18 }} />
+                  <Typography variant="body2">Founded Q4 2023</Typography>
+                </Stack>
+              </Stack>
+            </Box>
+            <Typography sx={{ pr: 16, mt: 4, fontSize: 14 }}>
+              Sia operates in the high-growth AI/ML, Data Analytics, and
+              Enterprise SaaS sectors, aiming to provide advanced data solutions
+              for businesses. As a seed-stage company, it targets enterprises
+              seeking to leverage data for improved decision-making and
+              operational efficiency. While specific products are not detailed,
+              its focus is likely on platforms or tools that streamline data
+              analysis and machine learning integration. With 6 existing
+              customers, Sia is attempting to establish its market presence,
+              despite currently reporting no revenue. The competitive landscape
+              includes established players like Alteryx and Dataiku,
+              necessitating a strong differentiation strategy to capture a share
+              of the $300 billion market.
+            </Typography>
+          </Grid>
+          <Grid
+            item
+            size={{ xs: 12, md: 3.5 }}
+            sx={{ alignItems: "center", display: "flex" }}
+          >
+            <Box>
+              <Box
+                sx={{
+                  mb: 4,
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <Chip
+                  size="small"
+                  label="CONSIDER"
+                  color="primary"
+                  sx={{ p: 0.5, fontSize: 12, mr: 2 }}
+                />
+                <Typography sx={{ fontSize: 16 }}>
+                  Investment Recommendation
+                </Typography>
+              </Box>
+              <InvestmentScore score={8.1} />
+            </Box>
+          </Grid>
         </Grid>
+      </Box>
 
-        <Grid item xs={12} md={9}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Company Summary
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                TechStart AI is a B2B SaaS platform offering AI-powered
-                analytics solutions to mid-market enterprises. With $1.2M ARR
-                and 42% YoY growth, the startup has strong product-market fit
-                across 50+ enterprise customers.
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <CustomTabs tab={tab} setTab={setTab} tabsConfig={tabsConfig} />
 
-      {/* Key Metrics */}
-      <Grid container spacing={2} mb={3}>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Key Metrics
-              </Typography>
-              <Typography>
-                <b>Monthly Revenue:</b> $98K
-              </Typography>
-              <Typography>
-                <b>Growth Rate:</b>{" "}
-                <span style={{ color: "green" }}>42% YoY</span>
-              </Typography>
-              <Typography>
-                <b>Team Size:</b> 12 employees
-              </Typography>
-              <Typography>
-                <b>Market Position:</b> Top 15%
-              </Typography>
-              <Typography>
-                <b>Runway:</b> 18 months
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Revenue Growth Trajectory
-              </Typography>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#2979ff"
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Market Opportunity
-              </Typography>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={marketData}
-                    dataKey="value"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={70}
-                    label
-                  >
-                    {marketData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Strengths and Risks */}
-      <Grid container spacing={2} mb={3}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Strengths
-              </Typography>
-              <ul>
-                <li>Strong Product-Market Fit</li>
-                <li>Experienced Team</li>
-                <li>Scalable Technology</li>
-              </ul>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Key Risks
-              </Typography>
-              <ul>
-                <li>Market Competition</li>
-                <li>Customer Concentration</li>
-                <li>Regulatory Changes</li>
-              </ul>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Tabs Section */}
-      <Card>
-        <CardContent>
-          <Tabs value={tab} onChange={(e, v) => setTab(v)} centered>
-            <Tab label="Summary" />
-            <Tab label="Risks" />
-            <Tab label="Benchmarks" />
-            <Tab label="Recommendations" />
-            <Tab label="Next Steps" />
-          </Tabs>
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="body2">
-            {tab === 0 && "This is a summary of TechStart AI's analysis."}
-            {tab === 1 &&
-              "These are the key risks associated with TechStart AI."}
-            {tab === 2 && "Benchmark comparison with industry peers."}
-            {tab === 3 && "Recommended actions for investors."}
-            {tab === 4 && "Next steps for follow-up analysis."}
-          </Typography>
-        </CardContent>
-      </Card>
+      {tab === "summary" && (
+        <DealNoteSummary revenueData={revenueData} marketData={marketData} />
+      )}
+      {tab === "benchmarks" && <BenchmarkingTable />}
     </Box>
   );
 }

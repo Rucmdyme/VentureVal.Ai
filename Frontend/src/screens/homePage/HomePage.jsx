@@ -24,16 +24,18 @@ import UploadButton from "../../components/uploadButton";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
+const initialSelectedFiles = {
+  pitch_deck: [],
+  call_transcript: [],
+  founder_update: [],
+  email_communication: [],
+};
+
 function HomePage() {
   const [weights, setWeights] = useState(PRESETS["Default (Custom)"]);
   const [preset, setPreset] = useState("Default (Custom)");
   const [apiProgress, setApiProgress] = useState(0);
-  const [selectedFiles, setSelectedFiles] = useState({
-    pitch_deck: [],
-    call_transcript: [],
-    founder_update: [],
-    email_communication: [],
-  });
+  const [selectedFiles, setSelectedFiles] = useState(initialSelectedFiles);
   const [showAnalyzing, setShowAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const navigate = useNavigate();
@@ -41,6 +43,13 @@ function HomePage() {
   const isDisabled =
     uploading ||
     Object.values(selectedFiles).every((files) => files.length === 0);
+
+  const resetPage = () => {
+    setWeights(PRESETS["Default (Custom)"]);
+    setPreset("Default (Custom)");
+    setApiProgress(0);
+    setSelectedFiles(initialSelectedFiles);
+  };
 
   const handleScroll = () => {
     uploadRef.current.scrollIntoView({ behavior: "smooth" });
@@ -52,7 +61,7 @@ function HomePage() {
         const resp = await getAnalysisData(analysis_id);
         setApiProgress(resp.progress);
         if (resp.status === "failed") {
-          toast.error("Analysis failed");
+          toast.error("Analysis failed, Please Try again.");
           setShowAnalyzing(false);
           return null;
         }
@@ -63,7 +72,7 @@ function HomePage() {
         await new Promise((resolve) => setTimeout(resolve, interval));
       } catch (err) {
         console.error("Polling error:", err);
-        throw err;
+        setShowAnalyzing(false);
       }
     }
   };
@@ -84,27 +93,43 @@ function HomePage() {
         if (files.length === 0) return null;
 
         const file = files[0];
-        const resp = await getPresignedUrl({
-          filename: file.name,
-          content_type: file.type,
-          file_type: key,
-        });
+        try {
+          const resp = await getPresignedUrl({
+            filename: file.name,
+            content_type: file.type,
+            file_type: key,
+          });
 
-        const uploaded = await fetch(resp.signed_url, {
-          method: "PUT",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
+          if (!resp.success) return null;
 
-        if (uploaded.ok) {
-          return resp.storage_path;
-        } else {
+          const uploaded = await fetch(resp.signed_url, {
+            method: "PUT",
+            headers: { "Content-Type": file.type },
+            body: file,
+          });
+
+          if (uploaded.ok) {
+            return resp.storage_path;
+          } else {
+            console.error("Upload failed:", uploaded.statusText);
+            return null;
+          }
+        } catch (err) {
+          console.error("Upload error:", err);
           return null;
         }
       }
     );
-    const results = await Promise.all(uploadPromises);
+    const settled = await Promise.allSettled(uploadPromises);
+    const results = settled
+      .filter((r) => r.status === "fulfilled" && r.value)
+      .map((r) => r.value);
+
     setUploading(false);
+    if (results.length === 0) {
+      toast.error("No files were uploaded successfully. Please try again.");
+      return;
+    }
     setShowAnalyzing(true);
     const normalizedWeights = Object.fromEntries(
       Object.entries(weights).map(([key, val]) => [key, val / 100])
@@ -120,7 +145,10 @@ function HomePage() {
     const analysis_id = analysisDetails.analysis_id;
 
     const finalAnalysis = await pollAnalysisStatus(analysis_id);
-    navigate("/dashboard");
+    if (finalAnalysis) {
+      navigate("/dashboard");
+      resetPage();
+    }
 
     console.log("Final Analysis Result:", finalAnalysis);
   };
