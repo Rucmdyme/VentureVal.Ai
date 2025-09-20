@@ -248,7 +248,7 @@ class WeightingCalculator:
             'explanation': explanation.strip(),
             'confidence': confidence,
             'key_strengths': self.identify_strengths(dimensions, weights),
-            'key_concerns': risk_assessment.get('risk_explanations', [])[:2]
+            'key_concerns': risk_assessment.get('risk_explanations', [])[:3]
         }
 
     def identify_strengths(self, dimensions: Dict, weights: Dict) -> List[str]:
@@ -259,9 +259,9 @@ class WeightingCalculator:
             dim: score * weights.get(dim, 0.1) 
             for dim, score in dimensions.items()
         }
-        
-        # Get top 2 weighted strengths
-        top_strengths = sorted(weighted_dimensions.items(), key=lambda x: x[1], reverse=True)[:2]
+
+        # Get top 3 weighted strengths
+        top_strengths = sorted(weighted_dimensions.items(), key=lambda x: x[1], reverse=True)[:3]
         
         return [
             f"Strong {dim.replace('_', ' ')}: {dimensions[dim]:.1f}/10"
