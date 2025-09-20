@@ -196,11 +196,11 @@ class BenchmarkEngine:
         """Calculate percentile for a single metric"""
         
         try:
-            p10 = benchmark_distribution.get('p10', 0)
-            p25 = benchmark_distribution.get('p25', 0)
-            p50 = benchmark_distribution.get('p50', 0)
-            p75 = benchmark_distribution.get('p75', 0)
-            p90 = benchmark_distribution.get('p90', 0)
+            p10 = benchmark_distribution.get('p10') or 0
+            p25 = benchmark_distribution.get('p25') or 0
+            p50 = benchmark_distribution.get('p50') or 0
+            p75 = benchmark_distribution.get('p75') or 0
+            p90 = benchmark_distribution.get('p90') or 0
             
             # Calculate percentile
             if value <= p10:
