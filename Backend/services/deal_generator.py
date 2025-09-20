@@ -4,7 +4,7 @@ from google.genai import types
 
 import json
 import logging
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 from datetime import datetime
 import os
 from dataclasses import dataclass
@@ -175,6 +175,7 @@ class DealNoteGenerator:
                 'churn_rate': financials.get('churn_rate'),
                 'mrr': financials.get('mrr'),
                 'arr': financials.get('arr'),
+                'revenue_projections': financials.get('revenue_projections'),
                 
                 # Market metrics
                 'market_size': market.get('size'),
@@ -221,6 +222,10 @@ class DealNoteGenerator:
                 try:
                     if value is not None and isinstance(value, (int, float)):
                         numerical_stats[key] = value
+                    elif value is not None and isinstance(value, list):
+                        # Keep list data for revenue projections
+                        if key in ['revenue_projections']:
+                            numerical_stats[key] = value
                     elif value is not None and isinstance(value, str):
                         # Try to convert string numbers to float
                         clean_value = str(value).replace('$', '').replace(',', '').replace('%', '').strip()
@@ -252,6 +257,72 @@ class DealNoteGenerator:
                 'stage': startup_data.get('stage'),
                 'recommendation_tier': weighted_scores.get('recommendation', {}).get('tier'),
             }
+
+    def _extract_revenue_projections(self, startup_data: Dict) -> List[Dict[str, Any]]:
+        """Extract revenue projections data from startup data"""
+        try:
+            # Get financials data
+            financials = startup_data.get('financials', {})
+            if not isinstance(financials, dict):
+                financials = {}
+            
+            # Also check synthesized data
+            synthesized_financials = startup_data.get('synthesized_data', {}).get('financials', {})
+            if not isinstance(synthesized_financials, dict):
+                synthesized_financials = {}
+            
+            # Combine both sources, prioritizing synthesized data
+            combined_financials = {**financials, **synthesized_financials}
+            
+            # Look for revenue projections
+            revenue_projections = combined_financials.get('revenue_projections')
+            
+            # If no direct projections found, try to construct from other revenue-related fields
+            if not revenue_projections or not isinstance(revenue_projections, list):
+                # Look for any field that might contain year-based revenue data
+                potential_fields = [
+                    'revenue_forecast',
+                    'annual_revenue_projections',
+                    'revenue_model',
+                    'projected_revenue',
+                    'historical_revenue',
+                    'revenue_by_year'
+                ]
+                
+                for field in potential_fields:
+                    field_data = combined_financials.get(field)
+                    if isinstance(field_data, list) and len(field_data) > 0:
+                        # Check if it looks like year-based revenue data
+                        if all(isinstance(item, dict) and 'year' in item and 'number' in item for item in field_data):
+                            revenue_projections = field_data
+                            break
+            
+            # Validate and format the data
+            if revenue_projections and isinstance(revenue_projections, list):
+                formatted_projections = []
+                for item in revenue_projections:
+                    if isinstance(item, dict) and 'year' in item and 'number' in item:
+                        try:
+                            year = int(item['year'])
+                            number = float(item['number']) if item['number'] is not None else None
+                            if number is not None and year >= 2020 and year <= 2030:  # Reasonable year range
+                                formatted_projections.append({
+                                    'year': year,
+                                    'number': number
+                                })
+                        except (ValueError, TypeError):
+                            continue
+                
+                # Sort by year and return
+                if formatted_projections:
+                    return sorted(formatted_projections, key=lambda x: x['year'])
+            
+            # Return empty list if no valid data found
+            return []
+            
+        except Exception as e:
+            logger.error(f"Error extracting revenue projections: {e}")
+            return []
 
     def _validate_inputs(self, startup_data: Dict, risk_assessment: Dict, 
                         benchmark_results: Dict, weighted_scores: Dict) -> bool:
@@ -395,7 +466,7 @@ class DealNoteGenerator:
             {{
             "company_description": "A comprehensive 100-150 word description of the company covering what they do, their business model, target market, key products/services, competitive advantages, and current market position in the {sector} sector.",
             
-            "deal_summary": "A comprehensive 100-150 word summary covering the investment opportunity, key strengths, market position, financial performance, team capabilities, and final recommendation with clear rationale.",
+            "deal_summary": "Generate a deal summary as a JSON array of strings. Each string in the array must be a separate key point and should be between 40 and 60 words long. The array should contain exactly 3 strings. Each string must cover different aspects of the investment opportunity, key strengths, market position, financial performance, team capabilities, and the final recommendation with a clear rationale.",
             
             "positive_insights": [
                 "High revenue growth",
@@ -497,6 +568,9 @@ class DealNoteGenerator:
     ) -> Dict[str, Any]:
         """Create successful response structure with JSON parsing"""
 
+        # Extract revenue projections data
+        revenue_projections = self._extract_revenue_projections(startup_data)
+        
         return {
             'generated_at': datetime.now().isoformat(),
             'company_name': startup_data.get('company_name', 'Unknown Company'),
@@ -509,6 +583,7 @@ class DealNoteGenerator:
             'positive_insights': content.get('positive_insights') if content else None,
             'negative_insights': content.get('negative_insights') if content else None,
             'detailed_analysis': content.get('detailed_analysis') if content else None,
+            'revenue_projections': revenue_projections,
             'summary_stats': self._extract_numerical_stats(startup_data, risk_assessment, benchmark_results, weighted_scores),
             'generation_metadata': {
                 'model_used': self.config.model_name,
@@ -527,6 +602,7 @@ class DealNoteGenerator:
         """Create fallback response when AI generation fails"""
         
         fallback_content = self._generate_fallback_summary(startup_data, weighted_scores)
+        revenue_projections = self._extract_revenue_projections(startup_data)
         
         return {
             'generated_at': datetime.now().isoformat(),
@@ -541,6 +617,7 @@ class DealNoteGenerator:
             'positive_insights': fallback_content.get('positive_insights'),
             'negative_insights': fallback_content.get('negative_insights'),
             'detailed_analysis': fallback_content.get('detailed_analysis'),
+            'revenue_projections': revenue_projections,
             'summary_stats': self._extract_numerical_stats(startup_data, {}, {'percentiles': {}}, weighted_scores),
             'generation_metadata': {
                 'model_used': 'fallback',

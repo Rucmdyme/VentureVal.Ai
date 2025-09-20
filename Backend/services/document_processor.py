@@ -18,6 +18,7 @@ import fitz
 from docx import Document
 from PIL import Image
 from settings import PROJECT_ID, GCP_REGION
+from utils.enhanced_text_cleaner import sanitize_for_frontend
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,9 @@ class DocumentProcessor:
            - Valuation (pre-money, post-money, target)
            - Unit economics (CAC, LTV, gross margins)
            - Runway calculations
+           - Revenue projections: Extract historical and future revenue data by year from charts, tables, financial models
+           - Look for revenue forecasts, P&L statements, cash flow projections showing year-over-year revenue
+           - Include both past performance and future projections (e.g., 2022: $500K, 2023: $1M, 2024: $2.5M)
 
         2. MARKET DATA: Extract market sizing and competitive information:
            - TAM/SAM/SOM with specific dollar amounts
@@ -192,7 +196,8 @@ class DocumentProcessor:
                 "gross_margin": "gross margin percentage (number only, null if not found)",
                 "cac": "customer acquisition cost in USD (number only, null if not found)",
                 "ltv": "lifetime value per customer in USD (number only, null if not found)",
-                "ltv_cac_ratio": "LTV to CAC ratio (number only, null if not found)"
+                "ltv_cac_ratio": "LTV to CAC ratio (number only, null if not found)",
+                "revenue_projections": "list of dictionaries with year and revenue data for historical and projected revenue (e.g., [{'year': 2022, 'number': 500000}, {'year': 2023, 'number': 1000000}, {'year': 2024, 'number': 2500000}], null if not found)"
             },
             "market": {
                 "size": "Total Addressable Market (TAM) in USD (number only, null if not found)",
@@ -279,9 +284,14 @@ class DocumentProcessor:
         7. Sector should be specific (not just "Technology" but "FinTech" or "AI/ML")
         8. Stage should match standard funding terminology
         9. Extract ALL readable text from charts, graphs, and financial projections
-        10. Flag any inconsistencies between documents in the inconsistencies array
-        11. Calculate data quality scores based on completeness and consistency
-        12. Identify what critical information is missing for investment analysis
+        10. For revenue projections: Extract year-over-year revenue data from charts, tables, financial models
+            - Look for historical revenue data (past 2-3 years) and future projections (next 3-5 years)
+            - Format as [{"year": YYYY, "number": revenue_amount}, {"year": YYYY, "number": revenue_amount}]
+            - Include related terms: "revenue forecast", "annual revenue", "projected revenue", "revenue model"
+            - Extract from pitch deck financial slides, business plan projections, P&L statements
+        11. Flag any inconsistencies between documents in the inconsistencies array
+        12. Calculate data quality scores based on completeness and consistency
+        13. Identify what critical information is missing for investment analysis
         """
 
         try:

@@ -403,13 +403,13 @@ class BenchmarkEngine:
         # For burn rate, lower is better
         if metric_name == 'burn_rate':
             if ratio <= 0.7:
-                return "Significantly better than median"
+                return "Significantly above median"
             elif ratio <= 0.9:
-                return "Better than median"
+                return "Above median"
             elif ratio <= 1.1:
                 return "Close to median"
             else:
-                return "Higher than median"
+                return "Below median"
         else:
             # For other metrics, higher is generally better
             if ratio >= 1.5:
