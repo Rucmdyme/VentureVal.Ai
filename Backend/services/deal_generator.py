@@ -365,6 +365,9 @@ REQUIREMENTS:
                 'monthly_revenue': financials.get('monthly_revenue') if isinstance(financials, dict) else None,
                 'runway_months': financials.get('runway_months') if isinstance(financials, dict) else None,
                 'funding_seeking': financials.get('funding_seeking') if isinstance(financials, dict) else None,
+                'Total Addressable Market (TAM)': (startup_data.get('market') or {}).get('size'),
+                'Serviceable Addressable Market (SAM)': (startup_data.get('market') or {}).get('sam'),
+                'Serviceable Obtainable Market (SOM)': (startup_data.get('market') or {}).get('som'),
 
             },
             'generation_metadata': {
