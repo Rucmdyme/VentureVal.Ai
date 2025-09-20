@@ -295,22 +295,24 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
                 6. Suggest follow-up considerations if relevant
 
                 RESPONSE REQUIREMENTS:
-                • Be concise but comprehensive (250-500 words)
-                • Start with a direct answer to the question
-                • Support with specific data from the analysis
-                • Explain investment implications and decision-making impact
-                • Use professional, confident investment analyst tone
-                • Include quantitative benchmarks and comparisons where relevant
+                • Keep response focused and concise (200-400 words maximum)
+                • Answer ONLY the specific question asked - don't expand beyond the scope
+                • Start with a direct, clear answer to the question
+                • Support with 2-3 key data points from the analysis
+                • Use bullet points for clarity when listing multiple items
+                • End with one actionable insight related to the question
+                • If data is missing, briefly acknowledge and suggest what's needed
+                • Maintain professional investment analyst tone
                 • Reference sector standards and best practices
-                • End with actionable insight or strategic recommendation
-                • If data is missing, acknowledge limitations and suggest what information would be valuable
+                • IMPORTANT: Complete your response fully - do not stop mid-sentence
 
                 INVESTMENT ANALYST RESPONSE:"""
+            
                             
             generation_config = types.GenerateContentConfig(
-                temperature=0.2,  # Lower for more consistent, professional responses
-                max_output_tokens=1500,  # Increased for more comprehensive answers
-                top_p=0.9,
+                temperature=0.3,  # Slightly higher for more complete responses
+                max_output_tokens=8000,  # High limit to prevent any truncation
+                top_p=0.95,  # Higher for more diverse token selection
                 top_k=40,
                 candidate_count=1,
                 safety_settings=[
@@ -333,7 +335,7 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
         
         if not response_text or not response_text.strip():
             raise HTTPException(status_code=500, detail="AI model returned empty response")
-            
+        
         return response_text.strip()
         
     except Exception as e:
