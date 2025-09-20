@@ -332,23 +332,6 @@ REQUIREMENTS:
         
         return prompt
     
-    def _safe_json_dump(self, data: Any, max_length: int) -> str:
-        """Safely serialize data to JSON with length limits"""
-        try:
-            json_str = json.dumps(data, indent=2, default=str)
-            if len(json_str) > max_length:
-                # Truncate and try to keep it valid
-                truncated = json_str[:max_length]
-                # Find the last complete line
-                last_newline = truncated.rfind('\n')
-                if last_newline > 0:
-                    truncated = truncated[:last_newline]
-                return truncated + "\n  [... data truncated ...]"
-            return json_str
-        except Exception as e:
-            logger.warning(f"JSON serialization failed: {e}")
-            return f"[Unable to serialize data: {str(data)[:200]}...]"
-    
     def _create_success_response(
         self, 
         startup_data: Dict, 
