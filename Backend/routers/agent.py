@@ -12,6 +12,7 @@ from models.schemas import ChatRequest, ChatResponse
 from models.database import get_firestore_client
 from utils.ai_client import monitor_usage, configure_gemini
 from settings import PROJECT_ID, GCP_REGION
+from utils.enhanced_text_cleaner import sanitize_for_frontend, clean_response_dict, clean_response_text
 
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -357,7 +358,14 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
         if not response_text or not response_text.strip():
             raise HTTPException(status_code=500, detail="AI model returned empty response")
         
-        return response_text.strip()
+        # Parse and validate JSON response
+        try:            
+            # Clean and sanitize the response for frontend consumption
+            return sanitize_for_frontend(response_text.strip())
+            
+        except Exception as e:
+            logger.error(f"Response parsing error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to parse AI response text")
         
     except Exception as e:
         logger.error(f"AI generation error: {str(e)}")
