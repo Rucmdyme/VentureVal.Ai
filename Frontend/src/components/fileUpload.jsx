@@ -13,7 +13,7 @@ import CloseIcon from "@mui/icons-material/Close";
 function FileUpload({
   uploadKey,
   onFileChange,
-  formats = ".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png",
+  formats = ".pdf,.txt,.jpg,.jpeg,.png",
   files = [],
   maxFiles = 1,
 }) {
@@ -53,7 +53,7 @@ function FileUpload({
     >
       <input
         type="file"
-        accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
+        accept=".pdf,.txt,.jpg,.jpeg,.png"
         style={{ display: "none" }}
         id={inputId}
         onChange={handleBrowse}

@@ -96,7 +96,7 @@ function HomePage() {
         try {
           const resp = await getPresignedUrl({
             filename: file.name,
-            content_type: file.type,
+            // content_type: file.type,
             file_type: key,
           });
 
