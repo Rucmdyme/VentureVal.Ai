@@ -7,6 +7,7 @@ from google import genai
 from utils.ai_client import configure_gemini
 import logging
 from settings import PROJECT_ID, GCP_REGION
+from utils.enhanced_text_cleaner import sanitize_for_frontend
 
 logger = logging.getLogger(__name__)
 
@@ -280,43 +281,70 @@ class BenchmarkEngine:
             6. Consider market timing and competitive dynamics
             7. Address investor concerns and opportunities
 
-            Generate 4-5 comprehensive insights covering:
-            - Competitive positioning analysis
-            - Growth trajectory assessment  
-            - Operational efficiency evaluation
-            - Market opportunity alignment
-            - Investment risk/opportunity summary
+            Generate 4-5 comprehensive insights covering different performance parameters.
 
-            Return ONLY a JSON array of detailed insights:
+            Return ONLY a JSON array with this exact structure:
             [
-                "Specific insight about competitive positioning with quantitative context and sector comparison",
-                "Detailed analysis of growth performance with benchmarking context and implications", 
-                "Operational efficiency assessment with specific metrics and improvement recommendations",
-                "Market opportunity evaluation with sector trends and positioning analysis",
-                "Investment summary with key strengths, concerns, and strategic recommendations"
+                {{
+                    "sentiment": "positive|negative|neutral",
+                    "parameter": "parameter name (2-6 words max, no underscores)",
+                    "value": "Specific insight about the parameter in 30-60 words with quantitative context and sector comparison (avoid unnecessary underscores).
+                            The insight should contain insight related to the parameter-
+                            Detailed analysis of growth performance with benchmarking context and implications, 
+                            Operational efficiency assessment with specific metrics and improvement recommendations,
+                            Market opportunity evaluation with sector trends and positioning analysis,
+                            Investment summary with key strengths, concerns, and strategic recommendations"
+                }},
+                {{
+                    "sentiment": "positive|negative|neutral", 
+                    "parameter": "parameter name (2-6 words max, no underscores)",
+                    "value": "Detailed analysis with benchmarking context and implications in 30-60 words (avoid unnecessary underscores)"
+                }}
             ]
 
-            Each insight should be:
+            SENTIMENT GUIDELINES:
+            - "positive": Performance above 60th percentile or strong competitive advantage
+            - "negative": Performance below 40th percentile or significant concern
+            - "neutral": Performance between 40-60th percentile or balanced assessment
+
+            PARAMETER FORMATTING REQUIREMENTS (CRITICAL):
+            - MUST be 2-6 words maximum when converted to readable form
+            - NO underscores (_) allowed anywhere in parameter names
+            - Examples: "Growth Rate", "Team Size", "Burn Rate", "Cash Runway", "Market Valuation", "Competitive Position", "Market Opportunity"
+            
+            VALUE FORMATTING REQUIREMENTS (CRITICAL):
+            - NO unwanted underscores (_) allowed anywhere in the value text
+            - Replace any potential underscores with spaces or appropriate punctuation
+            - Example: Use "growth rate" instead of "growth_rate", "team size" instead of "team_size"
+            
+            Each insight value should be:
+            - 30-60 words exactly
             - Specific to the {sector} sector and {startup_data.get('stage', 'unknown')} stage
             - Quantitative where possible with percentile references
             - Actionable with clear implications for management and investors
+            - Free of any underscore characters
             - Forward-looking with market context and competitive dynamics
-            - 2-3 sentences with concrete details and recommendations
             """
             
             response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash",contents = [prompt])
-            response_text = response.text.strip()
-            
-            # Extract JSON array
-            array_start = response_text.find('[')
-            array_end = response_text.rfind(']') + 1
-            
-            if array_start != -1 and array_end > array_start:
-                json_str = response_text[array_start:array_end]
-                insights = json.loads(json_str)
-                return insights[:4]  # Limit to 4 insights
+            insights = []
+            if response and hasattr(response, 'text') and response.text:
+                insights =  sanitize_for_frontend(response.text.strip())
             else:
+                logger.error(f"Response parsing error in generating insights: {str(e)}")
                 return []
+            validated_insights = []
+            for insight in insights:
+                if (isinstance(insight, dict) and 
+                    'sentiment' in insight and 
+                    'parameter' in insight and 
+                    'value' in insight and
+                    insight['sentiment'] in ['positive', 'negative', 'neutral']):
+                    
+                    # Clean and validate the insight
+                    validated_insights.append(insight)
+            
+            return validated_insights[:5] # Limit to 5 insights
                 
         except Exception as e:
             logger.error(f"Error generating insights: {e}")
