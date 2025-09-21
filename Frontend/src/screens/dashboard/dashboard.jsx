@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import BenchmarkingTable from "../../components/dealSummary/benchmarking/benchmarking";
 import Insights from "../../components/insights/insights";
 import RiskAssessmentRadar from "../../components/risks/riskAssesmentRadar";
+import ChatBot from "../../components/chatbot/Chatbot";
 
 export default function Dashboard() {
   const location = useLocation();
@@ -181,6 +182,7 @@ export default function Dashboard() {
         <BenchmarkingTable benchMarking={benchmarking} />
       )}
       {tab === "insights" && <Insights insightsData={benchmarking?.insights} />}
+      <ChatBot />
     </Box>
   );
 }
