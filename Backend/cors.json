@@ -1,8 +1,0 @@
-[
-  {
-    "origin": ["http://localhost:5173", "https://your-production-frontend.com"],
-    "responseHeader": ["Content-Type", "Authorization"],
-    "method": ["GET", "PUT", "POST", "HEAD", "DELETE"],
-    "maxAgeSeconds": 3600
-  }
-]
