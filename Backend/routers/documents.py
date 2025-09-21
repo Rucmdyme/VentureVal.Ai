@@ -23,8 +23,6 @@ ALLOWED_MIME_TYPES = {
 
 ALLOWED_EXTENSIONS = {'.pdf', '.docx', '.txt', '.jpg', '.jpeg', '.png'}
 
-from datetime import timedelta
-
 @router.post("/generate-upload-url")
 async def generate_upload_url(request: DocumentUploadRequest):
     """

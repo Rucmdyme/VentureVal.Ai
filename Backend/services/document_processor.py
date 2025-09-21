@@ -5,7 +5,6 @@ import os
 from typing import List, Dict, Any
 from google import genai
 from firebase_admin import storage
-from PIL import Image
 import json
 import logging
 from datetime import timedelta
@@ -14,9 +13,6 @@ from utils.ai_client import configure_gemini
 from models.database import get_storage_bucket
 import re
 from urllib.parse import urlparse
-import fitz
-from docx import Document
-from PIL import Image
 from settings import PROJECT_ID, GCP_REGION
 from utils.enhanced_text_cleaner import sanitize_for_frontend
 
