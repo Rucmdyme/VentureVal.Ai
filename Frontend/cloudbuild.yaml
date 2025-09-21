@@ -1,15 +1,17 @@
 steps:
-  # Install deps
+  # Install dependencies inside Frontend
   - name: node:20
+    dir: Frontend
     entrypoint: npm
     args: ["ci"]
 
   # Build Frontend
   - name: node:20
+    dir: Frontend
     entrypoint: npm
     args: ["run", "build"]
 
-  # Deploy to Firebase Hosting
+  # Deploy to Firebase Hosting from root (where firebase.json is)
   - name: gcr.io/firebase-build/firebase
     args: ["deploy", "--only", "hosting"]
 
