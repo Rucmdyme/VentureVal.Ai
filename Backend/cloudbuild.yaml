@@ -1,0 +1,36 @@
+steps:
+  # Build image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'gcr.io/ventureval-ef705/ventureval-be:$COMMIT_SHA',
+      '-f', 'Backend/Dockerfile',
+      'Backend'
+    ]
+
+  # Push image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'push',
+      'gcr.io/ventureval-ef705/ventureval-be:$COMMIT_SHA'
+    ]
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      [
+        'run', 'deploy', 'ventureval-be',
+        '--image', 'gcr.io/ventureval-ef705/ventureval-be:$COMMIT_SHA',
+        '--region', 'asia-south1',
+        '--platform', 'managed',
+        '--allow-unauthenticated',
+        '--set-env-vars=PROJECT_ID=ventureval-ef705,BUCKET_ID=ventureval-ef705.firebasestorage.app,GCP_REGION=asia-south1',
+        '--set-secrets=FIREBASE_CONFIG_JSON=FIREBASE_CONFIG_JSON:latest'
+      ]
+
+images:
+  - 'gcr.io/ventureval-ef705/ventureval-be:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

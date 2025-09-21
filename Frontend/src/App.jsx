@@ -1,12 +1,18 @@
-import { Typography, Container } from "@mui/material";
+import { Routes, Route } from "react-router-dom";
+import HomePage from "./screens/homePage/HomePage";
+import Dashboard from "./screens/dashboard/dashboard";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 function App() {
   return (
-    <Container maxWidth="sm" sx={{ textAlign: "center", mt: 5 }}>
-      <Typography variant="h2" component="h1" gutterBottom>
-        ventireval.ai
-      </Typography>
-    </Container>
+    <>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
+      <ToastContainer position="top-center" autoClose={3000} />
+    </>
   );
 }
 
