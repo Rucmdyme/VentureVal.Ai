@@ -49,5 +49,4 @@ class FileType(str, Enum):
 
 class DocumentUploadRequest(BaseModel):
     filename: str
-    content_type: str
     file_type: FileType = Field(..., description="Type of document being uploaded")

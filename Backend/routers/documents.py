@@ -21,29 +21,24 @@ ALLOWED_MIME_TYPES = {
     'image/png'
 }
 
-ALLOWED_EXTENSIONS = {'.pdf', '.docx', '.txt', '.jpg', '.jpeg', '.png'}
+ALLOWED_EXTENSIONS = {'.pdf', '.txt', '.jpg', '.jpeg', '.png'}
 
 @router.post("/generate-upload-url")
 async def generate_upload_url(request: DocumentUploadRequest):
     """
     Generate a V4 signed URL for uploading a file directly to Firebase Storage.
     Supports file types: pitch_deck, call_transcript, founder_update, email_communication
-    Supports extensions: .pdf, .docx, .txt, .jpg, .jpeg, .png (Max 1 file)
+    Supports extensions: .pdf, .txt, .jpg, .jpeg, .png (Max 1 file)
     """
     try:
         # Step 1: Validate the file metadata from the request
         file_extension = Path(request.filename).suffix.lower()
-        if request.content_type not in ALLOWED_MIME_TYPES:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid file type: {request.content_type}. Supported types: .pdf, .docx, .txt, .jpg, .jpeg, .png"
-            )
         
         # Validate file extension
         if file_extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Invalid file extension: {file_extension}. Supported extensions: .pdf, .docx, .txt, .jpg, .jpeg, .png"
+                detail=f"Invalid file extension: {file_extension}. Supported extensions: .pdf, .txt, .jpg, .jpeg, .png"
             )
 
         # Step 2: Generate a unique path in Firebase Storage
@@ -61,7 +56,6 @@ async def generate_upload_url(request: DocumentUploadRequest):
             version="v4",
             expiration=timedelta(minutes=15),
             method="PUT",
-            content_type=request.content_type,
         )
 
         return {

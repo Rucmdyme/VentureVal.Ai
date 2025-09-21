@@ -37,10 +37,6 @@ class DocumentProcessor:
             self.model = None
         
         # File type classifications
-        self.image_formats = {'.jpg', '.jpeg', '.png'}
-        self.office_formats = {'.docx'}
-        self.pdf_formats = {'.pdf'}
-        self.text_formats = {'.txt'}
 
     def get_file_uri(self, file_path: str) -> str:
         bucket = storage.bucket()
@@ -58,8 +54,6 @@ class DocumentProcessor:
             ext = os.path.splitext(uri)[1].lower()
             if ext in ['.pdf']:
                 mime_type = 'application/pdf'
-            elif ext in ['.doc', '.docx']:
-                mime_type = 'application/msword'
             elif ext in ['.txt']:
                 mime_type = 'text/plain'
             elif ext in ['.jpg', '.jpeg']:
