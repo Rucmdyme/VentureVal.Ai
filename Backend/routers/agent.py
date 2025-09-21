@@ -304,9 +304,11 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
             full_prompt = f"""{context_prompt}
 
                 CONVERSATION CONTEXT:
-                This is a Q&A session with an investor who is evaluating this company for potential investment. They need professional, data-driven insights to make informed investment decisions.
+                This is a Q&A session with an investor who is evaluating this company for potential investment. They need professional, data-driven insights to make informed investment decisions. The investor values CONCISE, FOCUSED answers.
 
                 INVESTOR QUESTION: "{question}"
+
+                CRITICAL INSTRUCTION: Your response must be between 30-150 words maximum. Be direct, precise, and eliminate any unnecessary elaboration.
 
                 ANALYSIS APPROACH:
                 1. First, identify what specific aspect of the investment the question addresses (financial, risk, market, team, product, etc.)
@@ -317,24 +319,24 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
                 6. Suggest follow-up considerations if relevant
 
                 RESPONSE REQUIREMENTS:
-                • Keep response focused and concise (200-400 words maximum)
+                • Keep response STRICTLY within 30-150 words - this is critical for user experience
                 • Answer ONLY the specific question asked - don't expand beyond the scope
                 • Start with a direct, clear answer to the question
-                • Support with 2-3 key data points from the analysis
-                • Use bullet points for clarity when listing multiple items
-                • End with one actionable insight related to the question
-                • If data is missing, briefly acknowledge and suggest what's needed
+                • Support with 1-2 key data points from the analysis (be selective)
+                • Use concise bullet points if listing multiple items
+                • End with one brief actionable insight related to the question
+                • If data is missing, briefly acknowledge in 1 sentence
                 • Maintain professional investment analyst tone
-                • Reference sector standards and best practices
-                • IMPORTANT: Complete your response fully - do not stop mid-sentence
+                • Be precise and eliminate unnecessary words
+                • WORD COUNT LIMIT: Maximum 150 words, target 40-130 words
+                • IMPORTANT: Complete your response fully within the word limit
 
                 INVESTMENT ANALYST RESPONSE:"""
             
                             
             generation_config = types.GenerateContentConfig(
-                temperature=0.3,  # Slightly higher for more complete responses
-                max_output_tokens=8000,  # High limit to prevent any truncation
-                top_p=0.95,  # Higher for more diverse token selection
+                temperature=0.3,  # Controlled temperature for focused responses
+                top_p=0.9,  # Focused token selection for conciseness
                 top_k=40,
                 candidate_count=1,
                 safety_settings=[
