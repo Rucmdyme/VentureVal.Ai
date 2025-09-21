@@ -1,12 +1,12 @@
 # services/risk_analyzer.py
 import asyncio
-import os
 from typing import Dict, List, Optional, Any
 import json
 import logging
 from google import genai
 from utils.ai_client import configure_gemini
 from settings import PROJECT_ID, GCP_REGION
+from utils.enhanced_text_cleaner import sanitize_for_frontend
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class RiskAnalyzer:
         }
         
     async def analyze_risks(self, startup_data: Dict) -> Dict:
-        """Comprehensive risk assessment across 5 categories"""
+        """Comprehensive risk assessment across 5 categories with AI-first approach"""
         
         if not startup_data:
             return {
@@ -45,13 +45,13 @@ class RiskAnalyzer:
             }
         
         try:
-            # Analyze risks across all categories
+            # AI-first approach: Try AI analysis for each category first
             risk_analysis_tasks = [
-                self.analyze_financial_risks(startup_data),
-                self.analyze_market_risks(startup_data),
-                self.analyze_team_risks(startup_data),
-                self.analyze_product_risks(startup_data),
-                self.analyze_operational_risks(startup_data)
+                self._analyze_category_risks_ai_first(startup_data, "financial"),
+                self._analyze_category_risks_ai_first(startup_data, "market"),
+                self._analyze_category_risks_ai_first(startup_data, "team"),
+                self._analyze_category_risks_ai_first(startup_data, "product"),
+                self._analyze_category_risks_ai_first(startup_data, "operational")
             ]
             
             # Execute all risk analyses concurrently
@@ -64,14 +64,13 @@ class RiskAnalyzer:
             for i, (category, result) in enumerate(zip(categories, risk_results)):
                 if isinstance(result, Exception):
                     logger.error(f"Error analyzing {category} risks: {result}")
-                    risks[category] = [{
-                        'type': 'analysis_error',
-                        'severity': 5,
-                        'details': f'Error analyzing {category} risks: {str(result)}',
-                        'impact': 'medium'
-                    }]
+                    # Use fallback risks for this category
+                    risks[category] = self._generate_fallback_risks(category, startup_data)
                 else:
                     risks[category] = result
+
+            # Simple deduplication across categories (keep risk in first category it appears)
+            risks = self._simple_deduplicate_across_categories(risks)
             
             # Calculate overall risk score
             overall_risk = self.calculate_overall_risk(risks)
@@ -106,485 +105,569 @@ class RiskAnalyzer:
                 'risk_explanations': ['Risk analysis could not be completed']
             }
 
-    async def analyze_financial_risks(self, data: Dict) -> List[Dict]:
-        """Detect financial inconsistencies and red flags"""
+    def _generate_fallback_risks(self, category: str, data: Dict) -> List[Dict]:
+        """Generate fallback risks when AI analysis fails or returns insufficient risks"""
         
         risks = []
         
         try:
-            # Get financial data with safe access
-            financials = data.get('financials', {}) or data.get('synthesized_data', {}).get('financials', {})
+            if category == "financial":
+                risks.extend(self._generate_financial_fallback_risks(data))
+            elif category == "market":
+                risks.extend(self._generate_market_fallback_risks(data))
+            elif category == "team":
+                risks.extend(self._generate_team_fallback_risks(data))
+            elif category == "product":
+                risks.extend(self._generate_product_fallback_risks(data))
+            elif category == "operational":
+                risks.extend(self._generate_operational_fallback_risks(data))
             
-            # Revenue and growth rate validation
-            revenue = self._safe_numeric_get(financials, 'revenue')
-            growth_rate = self._safe_numeric_get(financials, 'growth_rate')
-            
-            # Unrealistic growth rate check
-            if growth_rate is not None:
-                if growth_rate > 1000:  # 1000%+ growth
-                    risks.append({
-                        'type': 'extremely_unrealistic_growth',
-                        'severity': 10,
-                        'details': f"Growth rate of {growth_rate}% is extremely unrealistic",
-                        'impact': 'high'
-                    })
-                elif growth_rate > 500:  # 500%+ growth
-                    risks.append({
-                        'type': 'unrealistic_growth',
-                        'severity': 8,
-                        'details': f"Growth rate of {growth_rate}% may be unrealistic for sustained periods",
-                        'impact': 'high'
-                    })
-                elif growth_rate < 0:  # Negative growth
-                    risks.append({
-                        'type': 'negative_growth',
-                        'severity': 7,
-                        'details': f"Negative growth rate of {growth_rate}% indicates declining business",
-                        'impact': 'high'
-                    })
-            
-            # Burn rate and runway analysis
-            burn_rate = self._safe_numeric_get(financials, 'burn_rate')
-            funding_raised = self._safe_numeric_get(financials, 'funding_raised')
-            
-            if burn_rate is not None and burn_rate > 0 and funding_raised is not None:
-                runway_months = funding_raised / burn_rate
-                
-                if runway_months < 6:
-                    risks.append({
-                        'type': 'critical_runway',
-                        'severity': 10,
-                        'details': f"Critical: Only {runway_months:.1f} months of runway remaining",
-                        'impact': 'critical'
-                    })
-                elif runway_months < 12:
-                    risks.append({
-                        'type': 'short_runway',
-                        'severity': 8,
-                        'details': f"Short runway: {runway_months:.1f} months remaining",
-                        'impact': 'high'
-                    })
-                elif runway_months < 18:
-                    risks.append({
-                        'type': 'moderate_runway',
-                        'severity': 5,
-                        'details': f"Moderate runway: {runway_months:.1f} months remaining",
-                        'impact': 'medium'
-                    })
-            
-            # Revenue vs burn rate mismatch
-            if revenue is not None and burn_rate is not None and revenue > 0:
-                revenue_coverage = (revenue * 12) / burn_rate if burn_rate > 0 else float('inf')
-                if revenue_coverage < 0.3:  # Revenue covers less than 30% of burn
-                    risks.append({
-                        'type': 'low_revenue_coverage',
-                        'severity': 7,
-                        'details': f"Annual revenue only covers {revenue_coverage*100:.1f}% of burn rate",
-                        'impact': 'high'
-                    })
-            
-            # Funding seeking vs burn rate
-            funding_seeking = self._safe_numeric_get(financials, 'funding_seeking')
-            if funding_seeking is not None and burn_rate is not None and burn_rate > 0:
-                potential_runway = funding_seeking / burn_rate
-                if potential_runway < 18:
-                    risks.append({
-                        'type': 'insufficient_funding_target',
-                        'severity': 6,
-                        'details': f"Funding target would only provide {potential_runway:.1f} months runway",
-                        'impact': 'medium'
-                    })
-            
-            # Missing financial data risks
-            if not any([revenue, burn_rate, funding_raised, growth_rate]):
+            # Ensure we have at least 3 risks
+            if len(risks) < 3:
                 risks.append({
-                    'type': 'missing_financial_data',
-                    'severity': 6,
-                    'details': "Critical financial metrics are missing or unclear",
-                    'impact': 'medium'
-                })
-        
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
-
-        except Exception as e:
-            logger.error(f"Financial risk analysis error: {e}")
-            risks.append({
-                'type': 'financial_analysis_error',
-                'severity': 5,
-                'details': f"Could not complete financial risk analysis: {str(e)}",
-                'impact': 'medium'
-            })
-        
-        return risks
-
-    async def analyze_market_risks(self, data: Dict) -> List[Dict]:
-        """Evaluate market-related risks"""
-        
-        risks = []
-        
-        try:
-            # Get market data with safe access
-            market = data.get('market', {}) or data.get('synthesized_data', {}).get('market', {})
-            
-            # Market size validation
-            market_size = self._safe_numeric_get(market, 'size')
-            if market_size is not None:
-                if market_size > 1e12:  # $1T+
-                    risks.append({
-                        'type': 'extremely_inflated_market',
-                        'severity': 8,
-                        'details': f"Market size of ${market_size/1e9:.0f}B appears extremely inflated",
-                        'impact': 'high'
-                    })
-                elif market_size > 500e9:  # $500B+
-                    risks.append({
-                        'type': 'inflated_market_size',
-                        'severity': 6,
-                        'details': f"Market size of ${market_size/1e9:.0f}B may be inflated or too broad",
-                        'impact': 'medium'
-                    })
-                elif market_size < 1e9:  # Less than $1B
-                    risks.append({
-                        'type': 'small_market_size',
-                        'severity': 5,
-                        'details': f"Market size of ${market_size/1e6:.0f}M may limit growth potential",
-                        'impact': 'medium'
-                    })
-            
-            # Competition analysis
-            competitors = market.get('competitors', [])
-            if isinstance(competitors, list):
-                if len(competitors) == 0:
-                    risks.append({
-                        'type': 'no_competition_identified',
-                        'severity': 6,
-                        'details': "No competitors identified - may indicate poor market research or unrealistic assumptions",
-                        'impact': 'medium'
-                    })
-                elif len(competitors) > 20:
-                    risks.append({
-                        'type': 'highly_competitive_market',
-                        'severity': 7,
-                        'details': f"Market has {len(competitors)} identified competitors - highly competitive space",
-                        'impact': 'high'
-                    })
-            
-            # Target market analysis
-            target = market.get('target_segment', '')
-            if not target or len(target.strip()) < 20:
-                risks.append({
-                    'type': 'unclear_target_market',
-                    'severity': 5,
-                    'details': "Target market definition is unclear or too broad",
-                    'impact': 'medium'
-                })
-    
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
-            
-        except Exception as e:
-            logger.error(f"Market risk analysis error: {e}")
-            risks.append({
-                'type': 'market_analysis_error',
-                'severity': 5,
-                'details': f"Could not complete market risk analysis: {str(e)}",
-                'impact': 'medium'
-            })
-        
-        return risks
-
-    async def analyze_team_risks(self, data: Dict) -> List[Dict]:
-        """Analyze team-related risks"""
-        
-        risks = []
-        
-        try:
-            # Get team data with safe access
-            team = data.get('team', {}) or data.get('synthesized_data', {}).get('team', {})
-            stage = data.get('stage', '') or data.get('synthesized_data', {}).get('stage', '')
-            
-            # Team size analysis
-            team_size = self._safe_numeric_get(team, 'size')
-            stage_lower = stage.lower() if stage else ''
-            
-            if team_size is not None:
-                if 'series_a' in stage_lower and team_size < 5:
-                    risks.append({
-                        'type': 'small_team_for_stage',
-                        'severity': 7,
-                        'details': f"Team size of {team_size} is small for Series A stage",
-                        'impact': 'high'
-                    })
-                elif 'series_b' in stage_lower and team_size < 10:
-                    risks.append({
-                        'type': 'small_team_for_stage',
-                        'severity': 6,
-                        'details': f"Team size of {team_size} may be small for Series B stage",
-                        'impact': 'medium'
-                    })
-                elif team_size < 2:
-                    risks.append({
-                        'type': 'insufficient_team_size',
-                        'severity': 8,
-                        'details': f"Team size of {team_size} is insufficient for startup execution",
-                        'impact': 'high'
-                    })
-                elif team_size > 200:
-                    risks.append({
-                        'type': 'oversized_team',
-                        'severity': 5,
-                        'details': f"Large team size of {team_size} may indicate inefficient operations",
-                        'impact': 'medium'
-                    })
-            
-            # Founder analysis
-            founders = team.get('founders', [])
-            if isinstance(founders, list):
-                if len(founders) == 0:
-                    risks.append({
-                        'type': 'no_founders_identified',
-                        'severity': 9,
-                        'details': "No founders identified in team information",
-                        'impact': 'critical'
-                    })
-                elif len(founders) == 1:
-                    risks.append({
-                        'type': 'single_founder_risk',
-                        'severity': 6,
-                        'details': "Single founder structure increases execution and key person risk",
-                        'impact': 'medium'
-                    })
-                elif len(founders) > 4:
-                    risks.append({
-                        'type': 'too_many_founders',
-                        'severity': 5,
-                        'details': f"{len(founders)} founders may lead to decision-making conflicts",
-                        'impact': 'medium'
-                    })
-            
-            # Key hires analysis
-            key_hires = team.get('key_hires', [])
-            if isinstance(key_hires, list) and len(key_hires) == 0 and team_size and team_size > 10:
-                risks.append({
-                    'type': 'no_key_hires_identified',
+                    'type': f'Insufficient {category.title()} Data',
                     'severity': 4,
-                    'details': "No key hires identified despite team size - may indicate weak talent acquisition",
-                    'impact': 'low'
+                    'details': f"Limited {category} information available for comprehensive risk assessment",
+                    'impact': 'medium',
+                    'likelihood': 'medium',
+                    'mitigation': f"Provide more detailed {category} metrics and documentation",
+                    'investor_concern': f"Cannot fully assess {category} risks due to data limitations"
+                })
+            
+        except Exception as e:
+            logger.error(f"Error generating fallback risks for {category}: {e}")
+            # Return basic fallback risks
+            risks = [{
+                'type': f'{category.title()} Analysis Error',
+                'severity': 5,
+                'details': f"Could not complete {category} risk analysis",
+                'impact': 'medium'
+            }]
+        
+        return risks[:5]  # Cap at 5 risks per category
+
+    def _generate_financial_fallback_risks(self, data: Dict) -> List[Dict]:
+        """Generate financial fallback risks"""
+        risks = []
+        
+        # Get financial data with safe access
+        financials = data.get('financials', {}) or data.get('synthesized_data', {}).get('financials', {})
+        
+        # Revenue and growth rate validation
+        revenue = self._safe_numeric_get(financials, 'revenue')
+        growth_rate = self._safe_numeric_get(financials, 'growth_rate')
+        burn_rate = self._safe_numeric_get(financials, 'burn_rate')
+        funding_raised = self._safe_numeric_get(financials, 'funding_raised')
+        
+        # Runway analysis
+        if burn_rate is not None and burn_rate > 0 and funding_raised is not None:
+            runway_months = funding_raised / burn_rate
+            
+            if runway_months < 6:
+                risks.append({
+                    'type': 'Critical Runway Shortage',
+                    'severity': 10,
+                    'details': f"Critical: Only {runway_months:.1f} months of runway remaining",
+                    'impact': 'critical',
+                    'likelihood': 'high',
+                    'mitigation': 'Secure immediate funding or drastically reduce burn rate',
+                    'investor_concern': 'High risk of company failure due to cash shortage'
+                })
+            elif runway_months < 12:
+                risks.append({
+                    'type': 'Short Financial Runway',
+                    'severity': 8,
+                    'details': f"Short runway: {runway_months:.1f} months remaining",
+                    'impact': 'high',
+                    'likelihood': 'high',
+                    'mitigation': 'Accelerate fundraising efforts and optimize cash flow',
+                    'investor_concern': 'Limited time to achieve milestones before next funding round'
+                })
+        
+
+        # Revenue vs burn rate mismatch
+        if revenue is not None and burn_rate is not None and revenue > 0:
+            revenue_coverage = (revenue * 12) / burn_rate if burn_rate > 0 else float('inf')
+            if revenue_coverage < 0.3:  # Revenue covers less than 30% of burn
+                risks.append({
+                    'type': 'Low Revenue Coverage',
+                    'severity': 7,
+                    'details': f"Annual revenue only covers {revenue_coverage*100:.1f}% of burn rate",
+                    'impact': 'high',
+                    'likelihood': 'high',
+                    'mitigation': 'Increase sales and optimize burn rate.',
+                    'investor_concern': 'Long-term sustainability and cash runway are at risk'
                 })
 
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
-
-        except Exception as e:
-            logger.error(f"Team risk analysis error: {e}")
+        # Revenue analysis
+        if revenue is None or revenue == 0:
             risks.append({
-                'type': 'team_analysis_error',
+                'type': 'No Current Revenue',
+                'severity': 7,
+                'details': "Company has no reported current revenue",
+                'impact': 'high',
+                'likelihood': 'high',
+                'mitigation': 'Focus on customer acquisition and monetization strategy',
+                'investor_concern': 'No proven business model or market validation'
+            })
+        
+        # Growth rate analysis
+        if growth_rate is not None:
+            if growth_rate > 500:
+                risks.append({
+                    'type': 'Unrealistic Growth Projections',
+                    'severity': 8,
+                    'details': f"Growth rate of {growth_rate}% appears unrealistic",
+                    'impact': 'high',
+                    'likelihood': 'medium',
+                    'mitigation': 'Provide detailed justification for growth assumptions',
+                    'investor_concern': 'Overly optimistic projections may indicate poor planning'
+                })
+            elif growth_rate < 0:  # Negative growth
+                risks.append({
+                    'type': 'Negative Growth Trend',
+                    'severity': 7,
+                    'details': f"Negative growth rate of {growth_rate}% indicates declining business",
+                    'impact': 'high',
+                    'likelihood': 'high',
+                    'mitigation': 'Revise strategy to address declining metrics',
+                    'investor_concern': 'Long-term viability is at risk'
+                })
+        
+                   # Missing financial data risks
+        if not any([revenue, burn_rate, funding_raised, growth_rate]):
+            risks.append({
+                'type': 'Missing Financial Data',
+                'severity': 6,
+                'details': f"Critical financial metrics are missing or unclear",
+                'impact': 'medium',
+                'likelihood': 'medium',
+                'mitigation': 'Provide full, verified financial statements',
+                'investor_concern': 'Inability to assess business health and returns'
+            })
+        return risks
+
+    def _generate_market_fallback_risks(self, data: Dict) -> List[Dict]:
+        """Generate market fallback risks"""
+        risks = []
+        
+        # Get market data with safe access
+        market = data.get('market', {}) or data.get('synthesized_data', {}).get('market', {})
+        
+        # Market size validation
+        market_size = self._safe_numeric_get(market, 'size')
+        if market_size is not None:
+            if market_size > 1e12:  # $1T+
+                risks.append({
+                    'type': 'Inflated Market Size Claims',
+                    'severity': 8,
+                    'details': f"Market size of ${market_size/1e9:.0f}B appears extremely inflated",
+                    'impact': 'high',
+                    'likelihood': 'medium',
+                    'mitigation': 'Provide detailed market research and sizing methodology',
+                    'investor_concern': 'Unrealistic market assumptions may indicate poor research'
+                })
+        
+        # Competition analysis
+        competitors = market.get('competitors', [])
+        if isinstance(competitors, list):
+            if len(competitors) == 0:
+                risks.append({
+                    'type': 'No Identified Competitors',
+                    'severity': 6,
+                    'details': "No competitors identified - may indicate poor market research",
+                    'impact': 'medium',
+                    'likelihood': 'high',
+                    'mitigation': 'Conduct thorough competitive analysis',
+                    'investor_concern': 'Lack of market understanding or unrealistic assumptions'
+                })
+            elif len(competitors) > 15:
+                risks.append({
+                    'type': 'Highly Competitive Market',
+                    'severity': 7,
+                    'details': f"Market has {len(competitors)} identified competitors",
+                    'impact': 'high',
+                    'likelihood': 'high',
+                    'mitigation': 'Develop strong differentiation strategy',
+                    'investor_concern': 'Difficult to gain market share in crowded space'
+                })
+        
+        # Target market analysis
+        target = market.get('target_segment', '')
+        if not target or len(target.strip()) < 20:
+            risks.append({
+                'type': 'Unclear Target Market',
                 'severity': 5,
-                'details': f"Could not complete team risk analysis: {str(e)}",
-                'impact': 'medium'
+                'details': "Target market definition is unclear or too broad",
+                'impact': 'medium',
+                'likelihood': 'medium',
+                'mitigation': 'Define specific target customer segments',
+                'investor_concern': 'Unclear go-to-market strategy'
             })
         
         return risks
 
-    async def analyze_product_risks(self, data: Dict) -> List[Dict]:
-        """Analyze product and technology risks"""
-        
+    def _generate_team_fallback_risks(self, data: Dict) -> List[Dict]:
+        """Generate team fallback risks"""
         risks = []
         
-        try:
-            # Get product data with safe access
-            product = data.get('product', {}) or data.get('synthesized_data', {}).get('product', {})
-            
-            # Product competitive_advantage analysis
-            competitive_advantage = product.get('competitive_advantage', '')
-            if not competitive_advantage or len(competitive_advantage.strip()) < 30:
+        # Get team data with safe access
+        team = data.get('team', {}) or data.get('synthesized_data', {}).get('team', {})
+        stage = data.get('stage', '') or data.get('synthesized_data', {}).get('stage', '')
+        
+        # Team size analysis
+        team_size = self._safe_numeric_get(team, 'size')
+        stage_lower = stage.lower() if stage else ''
+        
+        if team_size is not None:
+            if 'series_a' in stage_lower and team_size < 5:
                 risks.append({
-                    'type': 'competitive_advantage_unclear',
+                    'type': 'Small Team For Stage',
+                    'severity': 7,
+                    'details': f"Team size of {team_size} is small for Series A stage",
+                    'impact': 'high',
+                    'likelihood': 'high',
+                    'mitigation': 'Accelerate hiring of key roles',
+                    'investor_concern': 'Insufficient capacity to execute growth plans'
+                })
+            elif 'series_b' in stage_lower and team_size < 10:
+                risks.append({
+                    'type': 'Small Team For Stage',
                     'severity': 6,
-                    'details': "Product competitive advantage is unclear or poorly defined",
-                    'impact': 'medium'
+                    'details': f"Team size of {team_size} may be small for Series B stage",
+                    'impact': 'medium',
+                    'likelihood': 'high',
+                    'mitigation': 'Accelerate hiring of key roles',
+                    'investor_concern': 'Insufficient capacity to execute growth plans'
+                })
+            elif team_size < 2:
+                risks.append({
+                    'type': 'Insufficient Team Size',
+                    'severity': 8,
+                    'details': f"Team size of {team_size} is insufficient for startup execution",
+                    'impact': 'high',
+                    'likelihood': 'high',
+                    'mitigation': 'Build core team with complementary skills',
+                    'investor_concern': 'High execution risk with minimal team'
                 })
             
-            # Product description analysis
-            description = product.get('description', '')
-            if not description or len(description.strip()) < 50:
+
+        
+        # Founder analysis
+        founders = team.get('founders', [])
+        if isinstance(founders, list):
+            if len(founders) == 0:
                 risks.append({
-                    'type': 'vague_product_description',
+                    'type': 'No Founders Identified',
+                    'severity': 9,
+                    'details': "No founders identified in team information",
+                    'impact': 'critical',
+                    'likelihood': 'high',
+                    'mitigation': 'Clarify founding team structure',
+                    'investor_concern': 'Unclear leadership and ownership structure'
+                })
+            elif len(founders) == 1:
+                risks.append({
+                    'type': 'Single Founder Risk',
+                    'severity': 6,
+                    'details': "Single founder structure increases key person risk",
+                    'impact': 'medium',
+                    'likelihood': 'medium',
+                    'mitigation': 'Consider bringing on co-founders or key executives',
+                    'investor_concern': 'High dependency on single individual'
+                })
+            elif len(founders) > 4:
+                risks.append({
+                    'type': 'Too Many Founders',
                     'severity': 5,
-                    'details': "Product description is vague or insufficient",
-                    'impact': 'medium'
+                    'details': f"{len(founders)} founders may lead to decision-making conflicts",
+                    'impact': 'medium',
+                    'likelihood': 'medium',
+                    'mitigation': 'Clearly define roles and decision-making processes',
+                    'investor_concern': 'Decision making conflicts'
                 })
-            
-            # Product stage analysis
-            product_stage = (product.get('stage') or '').lower()
-            company_stage = (data.get('stage') or '').lower()
-
-            if 'concept' in product_stage or 'idea' in product_stage:
-                if 'series_a' in company_stage:
-                    risks.append({
-                        'type': 'product_stage_mismatch',
-                        'severity': 8,
-                        'details': "Product still in concept stage but seeking Series A funding",
-                        'impact': 'high'
-                    })
-            
-            # Business model analysis
-            business_model = product.get('business_model', '')
-            if not business_model or len(business_model.strip()) < 20:
-                risks.append({
-                    'type': 'unclear_business_model',
-                    'severity': 6,
-                    'details': "Business model is unclear or not well defined",
-                    'impact': 'medium'
-                })
-
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
-
-        except Exception as e:
-            logger.error(f"Product risk analysis error: {e}")
+        
+        # Key hires analysis
+        key_hires = team.get('key_hires', [])
+        if isinstance(key_hires, list) and len(key_hires) == 0 and team_size and team_size > 10:
             risks.append({
-                'type': 'product_analysis_error',
-                'severity': 5,
-                'details': f"Could not complete product risk analysis: {str(e)}",
-                'impact': 'medium'
+                'type': 'No Key Hires Identified',
+                'severity': 4,
+                'details': "No key hires identified despite team size - may indicate weak talent acquisition",
+                'impact': 'low',
+                'likelihood': 'medium',
+                'mitigation': 'Recruit experienced professionals for critical roles',
+                'investor_concern': 'May lack specialized expertise for growth'
             })
         
         return risks
 
-    async def analyze_operational_risks(self, data: Dict) -> List[Dict]:
-        """Analyze operational risks using AI and heuristics"""
-        
+    def _generate_product_fallback_risks(self, data: Dict) -> List[Dict]:
+        """Generate product fallback risks"""
         risks = []
         
-        try:
-            # Basic operational risk checks
-            traction = data.get('traction', {}) or data.get('synthesized_data', {}).get('traction', {})
-            
-            # Customer vs user analysis
-            customers = self._safe_numeric_get(traction, 'customers')
-            users = self._safe_numeric_get(traction, 'users')
-            
-            if users is not None and customers is not None:
-                if users > 0 and customers == 0:
-                    risks.append({
-                        'type': 'users_without_customers',
-                        'severity': 6,
-                        'details': f"Has {users} users but no paying customers - monetization challenge",
-                        'impact': 'medium'
-                    })
-                elif users > 0 and customers > 0:
-                    conversion_rate = customers / users
-                    if conversion_rate < 0.01:  # Less than 1% conversion
-                        risks.append({
-                            'type': 'low_conversion_rate',
-                            'severity': 7,
-                            'details': f"Very low user-to-customer conversion rate ({conversion_rate*100:.2f}%)",
-                            'impact': 'high'
-                        })
-            
-            # Partnership analysis
-            partnerships = traction.get('partnerships', [])
-            if isinstance(partnerships, list) and len(partnerships) == 0:
-                stage = (data.get('stage') or '').lower()
-                if 'series_a' in stage or 'series_b' in stage:
-                    risks.append({
-                        'type': 'no_partnerships',
-                        'severity': 4,
-                        'details': "No partnerships identified for growth stage company",
-                        'impact': 'low'
-                    })
-            
-            # Advanced AI-powered risk analysis
-            await self._ai_risk_analysis(data, risks)
-            
-        except Exception as e:
-            logger.error(f"Operational risk analysis error: {e}")
+        # Get product data with safe access
+        product = data.get('product', {}) or data.get('synthesized_data', {}).get('product', {})
+        
+        # Competitive advantage analysis
+        competitive_advantage = product.get('competitive_advantage', '')
+        if not competitive_advantage or len(competitive_advantage.strip()) < 30:
             risks.append({
-                'type': 'operational_analysis_error',
+                'type': 'Unclear Competitive Advantage',
+                'severity': 6,
+                'details': "Product competitive advantage is unclear or poorly defined",
+                'impact': 'medium',
+                'likelihood': 'high',
+                'mitigation': 'Clearly articulate unique value proposition',
+                'investor_concern': 'Difficulty differentiating from competitors'
+            })
+        
+        # Product description analysis
+        description = product.get('description', '')
+        if not description or len(description.strip()) < 50:
+            risks.append({
+                'type': 'Insufficient Product Description',
                 'severity': 5,
-                'details': f"Could not complete operational risk analysis: {str(e)}",
-                'impact': 'medium'
+                'details': "Product description is vague or insufficient",
+                'impact': 'medium',
+                'likelihood': 'medium',
+                'mitigation': 'Provide detailed product specifications and roadmap',
+                'investor_concern': 'Cannot assess product viability and market fit'
+            })
+        
+        # Product stage analysis
+        product_stage = (product.get('stage') or '').lower()
+        company_stage = (data.get('stage') or '').lower()
+        
+        if 'concept' in product_stage or 'idea' in product_stage:
+            if 'series_a' in company_stage:
+                risks.append({
+                    'type': 'Product Stage Mismatch',
+                    'severity': 8,
+                    'details': "Product still in concept stage but seeking Series A funding",
+                    'impact': 'high',
+                    'likelihood': 'high',
+                    'mitigation': 'Accelerate product development and validation',
+                    'investor_concern': 'High risk of product not meeting market needs'
+                })
+        business_model = product.get('business_model', '')
+        if not business_model or len(business_model.strip()) < 20:
+            risks.append({
+                'type': 'Unclear Business Model',
+                'severity': 6,
+                'details': "Business model is unclear or not well defined",
+                'impact': 'medium',
+                'likelihood': 'medium',
+                'mitigation': 'Define and validate a clear, sustainable revenue model',
+                'investor_concern': 'Unpredictable returns due to a lack of monetization strategy'
             })
         
         return risks
 
-    async def _ai_risk_analysis(self, data: Dict, risks: List[Dict]) -> None:
-        """Use Gemini AI for advanced risk pattern detection"""
+    def _generate_operational_fallback_risks(self, data: Dict) -> List[Dict]:
+        """Generate operational fallback risks"""
+        risks = []
+        
+        # Get traction data with safe access
+        traction = data.get('traction', {}) or data.get('synthesized_data', {}).get('traction', {})
+        
+        # Customer vs user analysis
+        customers = self._safe_numeric_get(traction, 'customers')
+        users = self._safe_numeric_get(traction, 'users')
+        
+        if users is not None and customers is not None:
+            if users > 0 and customers == 0:
+                risks.append({
+                    'type': 'No Paying Customers',
+                    'severity': 6,
+                    'details': f"Has {users} users but no paying customers",
+                    'impact': 'medium',
+                    'likelihood': 'high',
+                    'mitigation': 'Develop monetization strategy and pricing model',
+                    'investor_concern': 'Unproven ability to generate revenue from users'
+                })
+            elif users > 0 and customers > 0:
+                conversion_rate = customers / users
+                if conversion_rate < 0.01:  # Less than 1% conversion
+                    risks.append({
+                        'type': 'Low Conversion Rate',
+                        'severity': 7,
+                        'details': f"Very low user-to-customer conversion rate ({conversion_rate*100:.2f}%)",
+                        'impact': 'high',
+                        'likelihood': 'high',
+                        'mitigation': 'Improve product value proposition and pricing strategy',
+                        'investor_concern': 'Poor monetization efficiency'
+                    })
+        
+        # Partnership analysis
+        partnerships = traction.get('partnerships', [])
+        if isinstance(partnerships, list) and len(partnerships) == 0:
+            stage = (data.get('stage') or '').lower()
+            if 'series_a' in stage or 'series_b' in stage:
+                risks.append({
+                    'type': 'No Strategic Partnerships',
+                    'severity': 4,
+                    'details': "No partnerships identified for growth stage company",
+                    'impact': 'low',
+                    'likelihood': 'medium',
+                    'mitigation': 'Develop strategic partnerships for growth',
+                    'investor_concern': 'Limited channels for market expansion'
+                })
+        
+        # General operational risk
+        if customers is None and users is None:
+            risks.append({
+                'type': 'Missing Traction Data',
+                'severity': 5,
+                'details': "No customer or user traction data available",
+                'impact': 'medium',
+                'likelihood': 'high',
+                'mitigation': 'Provide comprehensive traction metrics',
+                'investor_concern': 'Cannot assess market validation and growth potential'
+            })
+        
+        return risks
+
+
+    async def _analyze_category_risks_ai_first(self, data: Dict, category: str) -> List[Dict]:
+        """AI-first risk analysis for a specific category with fallback mechanism"""
+        
+        try:
+            # First, try AI analysis
+            ai_risks = await self._ai_risk_analysis_for_category(data, category)
+            
+            # Check if we have enough risks (minimum 3)
+            if len(ai_risks) >= 3:
+                logger.info(f"AI successfully generated {len(ai_risks)} risks for {category}")
+                return ai_risks
+            else:
+                logger.warning(f"AI only generated {len(ai_risks)} risks for {category}, using fallback")
+                # Use fallback mechanism to supplement
+                fallback_risks = self._generate_fallback_risks(category, data)
+                
+                # Combine AI and fallback risks, ensuring no duplicates
+                combined_risks = ai_risks.copy()
+                
+                # Add fallback risks until we have at least 3 total
+                for fallback_risk in fallback_risks:
+                    if len(combined_risks) >= 3:
+                        break
+                    # Check for duplicates based on risk type
+                    if not any(existing['type'].lower() == fallback_risk['type'].lower() for existing in combined_risks):
+                        combined_risks.append(fallback_risk)
+                
+                return combined_risks
+                
+        except Exception as e:
+            logger.error(f"AI analysis failed for {category}: {e}")
+            # Complete fallback to default risk analysis
+            return self._generate_fallback_risks(category, data)
+
+    async def _ai_risk_analysis_for_category(self, data: Dict, risk_context: str) -> List[Dict]:
+        """Use Gemini AI for advanced risk pattern detection with specific context"""
 
         try:
             # Prepare data for AI analysis (limit size)
             analysis_data = json.dumps(data, indent=2)[:4000]
             
+            # Define context-specific risk frameworks
+            risk_frameworks = {
+                "financial": {
+                    "focus": "FINANCIAL RED FLAGS",
+                    "categories": [
+                        "- Unrealistic revenue projections or growth rates (>500% annually)",
+                        "- Burn rate exceeding revenue by >10x", 
+                        "- Runway less than 12 months without clear path to profitability",
+                        "- Unit economics that don't make sense (CAC > LTV)",
+                        "- Missing or inconsistent financial data",
+                        "- Funding amounts that don't align with stage or traction",
+                        "- Cash flow negative with no clear path to profitability",
+                        "- High customer acquisition costs relative to lifetime value",
+                        "- Revenue concentration risk (dependency on few customers)",
+                        "- Unrealistic valuation expectations vs financial performance"
+                    ]
+                },
+                "market": {
+                    "focus": "MARKET & COMPETITIVE RISKS",
+                    "categories": [
+                        "- Inflated market size claims (TAM >$1T without justification)",
+                        "- No identified competitors (suggests poor market research)",
+                        "- Declining or stagnant market growth",
+                        "- Unclear target customer definition",
+                        "- Competitive advantages that are easily replicable",
+                        "- Market timing risks (too early or too late)",
+                        "- Saturated market with established players",
+                        "- Regulatory barriers to market entry",
+                        "- Market size too small to support growth ambitions",
+                        "- Customer adoption challenges or long sales cycles"
+                    ]
+                },
+                "team": {
+                    "focus": "TEAM & PREVIOUS EXECUTION BY TEAM MEMBERS RISKS",
+                    "categories": [
+                        "- Single founder without co-founder",
+                        "- Team size misaligned with stage (too small for Series A+)",
+                        "- Lack of relevant industry experience",
+                        "- Missing key roles (CTO for tech company, etc.)",
+                        "- High founder/team turnover",
+                        "- Inexperienced team for complex market",
+                        "- Founder-market fit concerns",
+                        "- Key person dependency risks",
+                        "- Lack of technical expertise for product development",
+                        "- Poor track record of execution or previous failures"
+                    ]
+                },
+                "product": {
+                    "focus": "PRODUCT & TECHNOLOGY RISKS",
+                    "categories": [
+                        "- Product still in concept stage for late-stage funding",
+                        "- Unclear value proposition or differentiation",
+                        "- Technology risks or dependencies",
+                        "- Long development cycles without customer validation",
+                        "- Product-market fit concerns",
+                        "- Scalability limitations",
+                        "- Intellectual property vulnerabilities",
+                        "- Technical debt or architecture issues",
+                        "- Dependency on third-party platforms or APIs",
+                        "- Complex product requiring significant user education"
+                    ]
+                },
+                "operational": {
+                    "focus": "OPERATIONAL & TRACTION RISKS",
+                    "categories": [
+                        "- High user counts but no paying customers",
+                        "- Declining growth rates or user engagement",
+                        "- Customer concentration risk (>50% revenue from few customers)",
+                        "- Poor unit economics or customer retention",
+                        "- Lack of organic growth or high churn",
+                        "- Vanity metrics without business impact",
+                        "- Unclear go-to-market strategy",
+                        "- Regulatory or compliance risks",
+                        "- Dependency on key partnerships or suppliers",
+                        "- Scalability challenges in operations"
+                    ]
+                }
+            }
+            
+            # Get the appropriate framework
+            framework = risk_frameworks.get(risk_context, risk_frameworks["financial"])
+            focus_area = framework["focus"]
+            risk_categories = "\n".join(framework["categories"])
+            
             prompt = f"""
-            You are a senior investment analyst conducting comprehensive risk assessment on this startup. Analyze the data for critical investment risks and red flags that could impact returns.
+            You are a senior investment analyst conducting {focus_area.lower()} on this startup. Analyze the data for critical investment risks and red flags that could impact returns.
 
             STARTUP DATA FOR ANALYSIS:
             {analysis_data}
 
-            RISK ANALYSIS FRAMEWORK - Identify risks in these categories:
-
-            1. FINANCIAL RED FLAGS:
-               - Unrealistic revenue projections or growth rates (>500% annually)
-               - Burn rate exceeding revenue by >10x
-               - Runway less than 12 months without clear path to profitability
-               - Unit economics that don't make sense (CAC > LTV)
-               - Missing or inconsistent financial data
-               - Funding amounts that don't align with stage or traction
-
-            2. MARKET & COMPETITIVE RISKS:
-               - Inflated market size claims (TAM >$1T without justification)
-               - No identified competitors (suggests poor market research)
-               - Declining or stagnant market growth
-               - Unclear target customer definition
-               - Competitive advantages that are easily replicable
-               - Market timing risks (too early or too late)
-
-            3. TEAM & EXECUTION RISKS:
-               - Single founder without co-founder
-               - Team size misaligned with stage (too small for Series A+)
-               - Lack of relevant industry experience
-               - Missing key roles (CTO for tech company, etc.)
-               - High founder/team turnover
-               - Inexperienced team for complex market
-
-            4. PRODUCT & TECHNOLOGY RISKS:
-               - Product still in concept stage for late-stage funding
-               - Unclear value proposition or differentiation
-               - Technology risks or dependencies
-               - Long development cycles without customer validation
-               - Product-market fit concerns
-               - Scalability limitations
-
-            5. TRACTION & CUSTOMER RISKS:
-               - High user counts but no paying customers
-               - Declining growth rates or user engagement
-               - Customer concentration risk (>50% revenue from few customers)
-               - Poor unit economics or customer retention
-               - Lack of organic growth or high churn
-               - Vanity metrics without business impact
-
-            6. OPERATIONAL & STRATEGIC RISKS:
-               - Unclear go-to-market strategy
-               - Regulatory or compliance risks
-               - Dependency on key partnerships or suppliers
-               - Scalability challenges in operations
-               - Geographic or market expansion risks
-               - Capital efficiency concerns
-
-            7. DATA QUALITY & CONSISTENCY RISKS:
-               - Inconsistent metrics across documents
-               - Missing critical business data
-               - Unrealistic or unsubstantiated claims
-               - Timeline inconsistencies
-               - Conflicting information in different sources
+            RISK ANALYSIS FOCUS - {focus_area}:
+            {risk_categories}
 
             Return a JSON array of identified risks with detailed analysis:
             [
                 {{
-                    "category": "financial|market|team|product|traction|operational|data_quality",
-                    "type": "specific_risk_identifier",
+                    "category": "{risk_context}",
+                    "type": "Risk Name With Proper Spacing",
                     "severity": "1-10 (10 being deal-breaking)",
                     "details": "specific explanation of the risk with supporting evidence from data",
                     "evidence": "exact data points or metrics that support this risk assessment",
@@ -595,17 +678,24 @@ class RiskAnalyzer:
                 }}
             ]
 
-            ANALYSIS REQUIREMENTS:
-            1. Only identify risks with clear evidence from the provided data
-            2. Be specific about what makes each item risky (don't use generic statements)
-            3. Quantify risks where possible using actual numbers from the data
-            4. Consider stage-appropriate expectations (seed vs Series A standards)
-            5. Flag any data inconsistencies or missing critical information
-            6. Assess both current risks and future risk potential
-            7. Consider market context and competitive dynamics
-            8. Evaluate management team's ability to execute and scale
+            CRITICAL FORMATTING REQUIREMENTS FOR 'type' FIELD:
+            1. Use descriptive phrases with proper spacing (e.g., "Critical Short Runway", "Unrealistic Revenue Projections")
+            2. NO underscores (_), NO hyphens (-), NO camelCase
+            3. Use title case with spaces between words
+            4. Examples: "Missing Financial Data", "High Burn Rate", "Unclear Market Position"
+            5. Keep it concise but descriptive (3-12 words maximum)
 
-            Focus on risks that could significantly impact investment returns or company survival. Return only the JSON array.
+            ANALYSIS REQUIREMENTS:
+            1. ONLY analyze risks related to {focus_area.lower()}
+            2. Only identify risks with clear evidence from the provided data
+            3. Be specific about what makes each item risky (don't use generic statements)
+            4. Quantify risks where possible using actual numbers from the data
+            5. Consider stage-appropriate expectations (seed vs Series A standards)
+            6. Flag any data inconsistencies or missing critical information
+            7. Focus on risks that could significantly impact investment returns or company survival
+            8. Generate at least 3 distinct risks for this category ({focus_area.lower()}) if possible.
+
+            Return only the JSON array with risks specifically related to key metric: {risk_context} and focus area: {focus_area.lower()}.
             """
             
             model = genai.Client(
@@ -614,34 +704,62 @@ class RiskAnalyzer:
                 location=GCP_REGION
             )
             
-            response = await asyncio.to_thread(model.models.generate_content, model="gemini-2.5-flash",contents = [prompt])
-            
-            if response and response.text:
-                # Extract JSON from response
-                response_text = response.text.strip()
-                json_start = response_text.find('[')
-                json_end = response_text.rfind(']') + 1
-                
-                if json_start != -1 and json_end > json_start:
-                    json_str = response_text[json_start:json_end]
-                    ai_risks = json.loads(json_str)
+            response = await asyncio.to_thread(model.models.generate_content, model="gemini-2.5-flash", contents=[prompt])
+
+            if not response or not hasattr(response, 'text') or not response.text:
+                logger.error(f"Empty risk response for {risk_context}")
+                return []
+            try:
+                ai_risks = sanitize_for_frontend(response.text.strip())
+            except Exception as error:
+                logger.error(f"Response parsing error for risk response for {risk_context}: {str(error)}")
+                return []
                     
                     # Validate and add AI-identified risks
-                    for risk in ai_risks:
-                        if isinstance(risk, dict) and all(k in risk for k in ['type', 'severity', 'details']):
-                            # Ensure severity is within bounds
-                            risk['severity'] = max(1, min(10, int(risk.get('severity', 5))))
-                            if 'impact' not in risk:
-                                risk['impact'] = 'medium'
-                            risks.append(risk)
-                    
-                    logger.info(f"AI identified {len(ai_risks)} operational risks")
+            validated_risks = []
+            for risk in ai_risks:
+                if isinstance(risk, dict) and all(k in risk for k in ['type', 'severity', 'details']):
+                    # Ensure severity is within bounds
+                    risk['severity'] = max(1, min(10, int(risk.get('severity', 5))))
+                    if 'impact' not in risk:
+                        risk['impact'] = 'medium'
+                    validated_risks.append(risk)
+            
+            logger.info(f"AI identified {len(validated_risks)} {risk_context} risks")
+            return validated_risks
         
         except json.JSONDecodeError as e:
-            logger.warning(f"Could not parse AI operational risk response: {e}")
+            logger.warning(f"Could not parse AI {risk_context} risk response: {e}")
+            return []
         except Exception as e:
-            logger.warning(f"AI operational risk analysis failed: {e}")
-            # Don't add error to risks since this is supplementary analysis
+            logger.warning(f"AI {risk_context} risk analysis failed: {e}")
+            return []
+
+
+    def _simple_deduplicate_across_categories(self, risks: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
+        """Simple deduplication to remove exact duplicate risk types across categories"""
+        
+        seen_risk_types = set()
+        deduplicated_risks = {}
+        
+        # Process categories in priority order
+        category_priority = ['financial', 'market', 'team', 'product', 'operational']
+        
+        for category in category_priority:
+            if category not in risks:
+                continue
+                
+            deduplicated_risks[category] = []
+            
+            for risk in risks[category]:
+                risk_type_lower = risk.get('type', '').lower()
+                
+                # Only add if we haven't seen this exact risk type before
+                if risk_type_lower not in seen_risk_types:
+                    seen_risk_types.add(risk_type_lower)
+                    deduplicated_risks[category].append(risk)
+        
+        return deduplicated_risks
 
     def calculate_overall_risk(self, risks: Dict[str, List[Dict]]) -> float:
         """Calculate weighted overall risk score"""
