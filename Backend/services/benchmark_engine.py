@@ -66,7 +66,7 @@ class BenchmarkEngine:
             - Burn rate and runway expectations
             - Traction and customer metrics
 
-            Return ONLY valid JSON in this exact format with realistic numbers:
+            Return ONLY valid JSON in this EXACT format with NUMERIC VALUES ONLY (no strings, no text descriptions):
             {{
                 "revenue_multiples": {{
                     "p10": "10th percentile annual revenue in multiples",
@@ -113,32 +113,30 @@ class BenchmarkEngine:
             }}
 
             CRITICAL REQUIREMENTS:
-            1. All numbers must be realistic for {sector} companies in {geography}
-            2. Percentiles must be properly ordered (p10 < p25 < p50 < p75 < p90)
-            3. Consider current market conditions (2024-2025 funding environment)
-            4. Account for sector-specific business model characteristics
-            5. Reflect stage-appropriate expectations and metrics
-            6. Use whole numbers for counts, appropriate precision for financial metrics
-            7. Ensure burn rates align with team sizes and stage expectations
-            8. Valuations should reflect current market multiples for the sector
-            9. Growth rates should be realistic and sustainable
-            10. Unit economics should reflect healthy vs struggling companies across percentiles
+            1. ALL VALUES MUST BE NUMERIC ONLY - no strings, no text, no descriptions, no units
+            2. Use integers for counts (team_sizes, runway_months, growth_rates)
+            3. Use decimals for financial metrics (revenue_multiples, valuation_millions, burn_rates_monthly)
+            4. Percentiles must be properly ordered (p10 < p25 < p50 < p75 < p90)
+            5. All numbers must be realistic for {sector} companies in {geography}
+            6. Consider current market conditions (2024-2025 funding environment)
+            7. Account for sector-specific business model characteristics
+            8. Reflect stage-appropriate expectations and metrics
+            9. Ensure burn rates align with team sizes and stage expectations
+            10. Valuations should reflect current market multiples for the sector
+            11. Growth rates should be realistic and sustainable percentages (e.g., 50 for 50%)
+            12. NEVER include currency symbols, percentage signs, or any non-numeric characters for percentile data
+            13. NEVER use strings like "N/A", "unknown", "TBD" - only numbers
             """
             
             response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash", contents = [prompt])
-            response_text = response.text.strip()
-            
-            # Extract JSON from response
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
-            
-            if json_start != -1 and json_end > json_start:
-                json_str = response_text[json_start:json_end]
-                benchmarks = json.loads(json_str)
-                logger.info(f"Generated Gemini benchmarks for {sector}")
-                return benchmarks
+            if response and hasattr(response, 'text') and response.text:
+                try:
+                    return sanitize_for_frontend(response.text.strip())
+                except Exception as error:
+                    logger.error(f"Response parsing error in benchmark data formatting: {str(error)}")
+                    return self.get_default_benchmarks()
             else:
-                logger.warning("Failed to parse Gemini response, using fallback")
+                logger.error(f"Empty response while generating benchmark data using AI")
                 return self.get_default_benchmarks()
                 
         except Exception as e:
@@ -176,7 +174,9 @@ class BenchmarkEngine:
                     benchmarks[benchmark_key],
                     metric_name
                 )
-                percentiles[metric_name] = percentile_data
+                # Only add to percentiles if calculation was successful
+                if percentile_data is not None:
+                    percentiles[metric_name] = percentile_data
         
         # Calculate overall performance score
         overall_score = self._calculate_overall_score(percentiles)
@@ -197,11 +197,23 @@ class BenchmarkEngine:
         """Calculate percentile for a single metric"""
         
         try:
-            p10 = benchmark_distribution.get('p10') or 0
-            p25 = benchmark_distribution.get('p25') or 0
-            p50 = benchmark_distribution.get('p50') or 0
-            p75 = benchmark_distribution.get('p75') or 0
-            p90 = benchmark_distribution.get('p90') or 0
+            # Convert benchmark values to float to handle string inputs
+            def safe_float_convert(val):
+                try:
+                    return float(val) if val is not None else None
+                except (ValueError, TypeError):
+                    return None
+            
+            p10 = safe_float_convert(benchmark_distribution.get('p10'))
+            p25 = safe_float_convert(benchmark_distribution.get('p25'))
+            p50 = safe_float_convert(benchmark_distribution.get('p50'))
+            p75 = safe_float_convert(benchmark_distribution.get('p75'))
+            p90 = safe_float_convert(benchmark_distribution.get('p90'))
+            
+            # Skip calculation if any benchmark value is invalid
+            if any(val is None for val in [p10, p25, p50, p75, p90]):
+                logger.warning(f"Invalid benchmark data for {metric_name}, benchmark_distribution: {benchmark_distribution}.skipping percentile calculation")
+                return None
             
             # Calculate percentile
             if value <= p10:
@@ -329,9 +341,13 @@ class BenchmarkEngine:
             response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash",contents = [prompt])
             insights = []
             if response and hasattr(response, 'text') and response.text:
-                insights =  sanitize_for_frontend(response.text.strip())
+                try:
+                    insights =  sanitize_for_frontend(response.text.strip())
+                except Exception as error:
+                    logger.error(f"Response parsing error in generating insights: {str(error)}")
+                    return []
             else:
-                logger.error(f"Response parsing error in generating insights: {str(e)}")
+                logger.error(f"Empty response while generating insights using AI")
                 return []
             validated_insights = []
             for insight in insights:
