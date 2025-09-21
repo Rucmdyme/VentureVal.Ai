@@ -19,7 +19,7 @@ export default function WeightsSection({
   preset,
   setPreset,
 }) {
-  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  const total = Object.values(weights || {}).reduce((a, b) => a + b, 0);
 
   const handleChange = (factor, value) => {
     setWeights((prev) => ({

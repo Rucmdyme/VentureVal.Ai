@@ -81,7 +81,7 @@ function HomePage() {
     setSelectedFiles((prev) => ({ ...prev, [key]: files }));
   };
   const handleUpload = async () => {
-    const total = Object.values(weights).reduce((a, b) => a + b, 0);
+    const total = Object.values(weights || {}).reduce((a, b) => a + b, 0);
     if (total !== 100) {
       alert("Total weights must equal 100%");
       return;

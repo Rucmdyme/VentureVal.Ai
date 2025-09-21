@@ -221,7 +221,7 @@ const DealNoteSummary = ({ dealNote, weightedScores }) => {
             </CardContent>
           </Card>
         )}
-        {Object.keys(weightedScores?.dimension_scores)?.length && (
+        {Object.keys(weightedScores?.dimension_scores || {})?.length && (
           <Card
             sx={{
               borderRadius: 2,
