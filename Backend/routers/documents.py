@@ -33,11 +33,11 @@ async def generate_upload_url(request: DocumentUploadRequest):
     try:
         # Step 1: Validate the file metadata from the request
         file_extension = Path(request.filename).suffix.lower()
-        if request.content_type not in ALLOWED_MIME_TYPES:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid file type: {request.content_type}. Supported types: .pdf, .docx, .txt, .jpg, .jpeg, .png"
-            )
+        # if request.content_type not in ALLOWED_MIME_TYPES:
+        #     raise HTTPException(
+        #         status_code=400, 
+        #         detail=f"Invalid file type: {request.content_type}. Supported types: .pdf, .docx, .txt, .jpg, .jpeg, .png"
+        #     )
         
         # Validate file extension
         if file_extension not in ALLOWED_EXTENSIONS:
@@ -61,7 +61,6 @@ async def generate_upload_url(request: DocumentUploadRequest):
             version="v4",
             expiration=timedelta(minutes=15),
             method="PUT",
-            content_type=request.content_type,
         )
 
         return {
