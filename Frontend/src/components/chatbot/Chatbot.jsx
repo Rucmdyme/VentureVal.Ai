@@ -20,7 +20,9 @@ import BoltIcon from "@mui/icons-material/Bolt";
 const API_ENDPOINT =
   "https://ventureval-be-1094484866096.asia-south1.run.app/agent/agent/chat";
 
-const ChatBot = () => {
+const ChatBot = ({
+  analysisId = "analysis_49a4cf6c9ee845ed8753eef2b8e6d1fa",
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,9 +33,6 @@ const ChatBot = () => {
     "What benchmarks should I focus on?",
     "What additional information would tip the decision?",
   ]);
-  const [analysisId, setAnalysisId] = useState(
-    "analysis_49a4cf6c9ee845ed8753eef2b8e6d1fa"
-  );
 
   const [showSuggestedQuestions, setShowSuggestedQuestions] = useState(false);
   const [typingInterval, setTypingInterval] = useState(null);
@@ -151,7 +150,6 @@ const ChatBot = () => {
 
       setMessages((prevMessages) => [...prevMessages, botMessage]);
       setSuggestedQuestions(data.suggested_questions);
-      setAnalysisId(data.analysis_id);
     } catch (error) {
       console.error("Error fetching data from API:", error);
       const errorMessage = {

@@ -16,7 +16,7 @@ import ChatBot from "../../components/chatbot/Chatbot";
 
 export default function Dashboard() {
   const location = useLocation();
-  const { finalAnalysis } = location.state || {};
+  const { finalAnalysis, analysisId } = location.state || {};
   const {
     benchmarking,
     deal_note: dealNote,
@@ -182,7 +182,7 @@ export default function Dashboard() {
         <BenchmarkingTable benchMarking={benchmarking} />
       )}
       {tab === "insights" && <Insights insightsData={benchmarking?.insights} />}
-      <ChatBot />
+      <ChatBot analysisId={analysisId} />
     </Box>
   );
 }
