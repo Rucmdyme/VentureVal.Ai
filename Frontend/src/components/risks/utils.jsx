@@ -27,7 +27,7 @@ export const severityColors = {
 };
 
 export const transformRisks = (risk) => {
-  return Object.entries(risk)
+  return Object.entries(risk || {})
     .map(([key, items], idx) => {
       if (!items || items.length === 0) return null; // skip empty
 

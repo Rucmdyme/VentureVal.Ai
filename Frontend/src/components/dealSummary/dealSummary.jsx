@@ -81,7 +81,7 @@ const DealNoteSummary = ({ dealNote, weightedScores }) => {
     "Gross Margin": summaryStats?.gross_margin,
   };
 
-  const filteredMetrics = Object.entries(keyMetrics)
+  const filteredMetrics = Object.entries(keyMetrics || {})
     .filter(
       ([, value]) => value !== null && value !== undefined && value !== ""
     )
@@ -242,7 +242,7 @@ const DealNoteSummary = ({ dealNote, weightedScores }) => {
                   Detailed Score Breakdown
                 </Typography>
               </Box>
-              {Object.entries(weightedScores?.dimension_scores).map(
+              {Object.entries(weightedScores?.dimension_scores || {}).map(
                 ([key, value]) => (
                   <Box
                     key={key}

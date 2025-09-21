@@ -42,7 +42,7 @@ function HomePage() {
   const uploadRef = useRef(null);
   const isDisabled =
     uploading ||
-    Object.values(selectedFiles).every((files) => files.length === 0);
+    Object.values(selectedFiles || {}).every((files) => files.length === 0);
 
   const resetPage = () => {
     setWeights(PRESETS["Default (Custom)"]);
@@ -88,7 +88,7 @@ function HomePage() {
     }
     setUploading(true);
 
-    const uploadPromises = Object.entries(selectedFiles).map(
+    const uploadPromises = Object.entries(selectedFiles || {}).map(
       async ([key, files]) => {
         if (files.length === 0) return null;
 
@@ -132,7 +132,7 @@ function HomePage() {
     }
     setShowAnalyzing(true);
     const normalizedWeights = Object.fromEntries(
-      Object.entries(weights).map(([key, val]) => [key, val / 100])
+      Object.entries(weights || {}).map(([key, val]) => [key, val / 100])
     );
     const storagePaths = results.filter(Boolean);
     const analysisDetails = await startAnalysis({

@@ -18,7 +18,7 @@ import NoDataComponent from "../../noDataComponent";
 
 const BenchmarkingTable = ({ benchMarking }) => {
   const mapBenchmarkingData = (percentiles) => {
-    return Object.entries(percentiles).map(([metric, data]) => ({
+    return Object.entries(percentiles || {}).map(([metric, data]) => ({
       metric: snakeCaseToTitleCase(metric),
       company: data?.value,
       sector: data?.benchmark_median,
