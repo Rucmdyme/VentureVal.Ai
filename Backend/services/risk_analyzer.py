@@ -705,31 +705,28 @@ class RiskAnalyzer:
             )
             
             response = await asyncio.to_thread(model.models.generate_content, model="gemini-2.5-flash", contents=[prompt])
-            
-            if response and response.text:
-                # Extract JSON from response
-                response_text = response.text.strip()
-                json_start = response_text.find('[')
-                json_end = response_text.rfind(']') + 1
-                
-                if json_start != -1 and json_end > json_start:
-                    json_str = response_text[json_start:json_end]
-                    ai_risks = json.loads(json_str)
+
+            if not response or not hasattr(response, 'text') or not response.text:
+                logger.error(f"Empty risk response for {risk_context}")
+                return []
+            try:
+                ai_risks = sanitize_for_frontend(response.text.strip())
+            except Exception as error:
+                logger.error(f"Response parsing error for risk response for {risk_context}: {str(error)}")
+                return []
                     
                     # Validate and add AI-identified risks
-                    validated_risks = []
-                    for risk in ai_risks:
-                        if isinstance(risk, dict) and all(k in risk for k in ['type', 'severity', 'details']):
-                            # Ensure severity is within bounds
-                            risk['severity'] = max(1, min(10, int(risk.get('severity', 5))))
-                            if 'impact' not in risk:
-                                risk['impact'] = 'medium'
-                            validated_risks.append(risk)
-                    
-                    logger.info(f"AI identified {len(validated_risks)} {risk_context} risks")
-                    return validated_risks
+            validated_risks = []
+            for risk in ai_risks:
+                if isinstance(risk, dict) and all(k in risk for k in ['type', 'severity', 'details']):
+                    # Ensure severity is within bounds
+                    risk['severity'] = max(1, min(10, int(risk.get('severity', 5))))
+                    if 'impact' not in risk:
+                        risk['impact'] = 'medium'
+                    validated_risks.append(risk)
             
-            return []
+            logger.info(f"AI identified {len(validated_risks)} {risk_context} risks")
+            return validated_risks
         
         except json.JSONDecodeError as e:
             logger.warning(f"Could not parse AI {risk_context} risk response: {e}")

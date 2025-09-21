@@ -81,19 +81,15 @@ class DocumentProcessor:
         try:
             response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash", contents=contents)
             
-            if not response or not response.text:
+            if not response or not hasattr(response, 'text') or not response.text:
+                logger.error(f"Empty synthesis response from Gemini while processing documents")
                 raise Exception("Empty synthesis response from Gemini")
-            
-            # Parse synthesis result
-            response_text = response.text.strip()
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
-            
-            if json_start == -1 or json_end == 0:
-                raise Exception("No valid JSON in synthesis response")
-            
-            json_str = response_text[json_start:json_end]
-            synthesis_result = json.loads(json_str)
+            try:
+                synthesis_result = sanitize_for_frontend(response.text.strip())
+            except Exception as error:
+                logger.error(f"Response parsing error while processing file read response: {str(error)}")
+                raise Exception(f"Response parsing error while processing file read response: {str(error)}")
+
             
             # Add processing metadata
             synthesis_result['processing_info'] = {
