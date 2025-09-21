@@ -137,7 +137,6 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         try:
             processed_data = await doc_processor.process_documents_from_storage(request.storage_paths)
         except Exception as e:
-            await update_progress(status = "failed", error=f"Document processing failed: {str(e)}")
             raise ValueError(f"Document processing failed: {str(e)}")
         if not processed_data:
             raise ValueError("Document processing failed - no synthesized data extracted")
