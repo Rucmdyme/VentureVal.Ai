@@ -97,7 +97,12 @@ export default function Dashboard() {
                 sx={{ color: "#444444", fontSize: 14, my: 1 }}
               >
                 {dealNote?.summary_stats?.geography && (
-                  <Stack direction="row" spacing={0.5} alignItems="center">
+                  <Stack
+                    direction="row"
+                    spacing={0.5}
+                    alignItems="center"
+                    sx={{ maxWidth: "620px" }}
+                  >
                     <LocationOnIcon sx={{ fontSize: 18 }} />
                     <Typography variant="body2">
                       {dealNote?.summary_stats?.geography}

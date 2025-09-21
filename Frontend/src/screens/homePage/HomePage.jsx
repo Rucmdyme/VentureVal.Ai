@@ -149,8 +149,6 @@ function HomePage() {
       navigate("/dashboard", { state: { finalAnalysis } });
       resetPage();
     }
-
-    console.log("Final Analysis Result:", finalAnalysis);
   };
   const onAnalysisComplete = () => {
     console.log("Analysis Complete");
