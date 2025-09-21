@@ -146,7 +146,7 @@ function HomePage() {
 
     const finalAnalysis = await pollAnalysisStatus(analysis_id);
     if (finalAnalysis) {
-      navigate("/dashboard");
+      navigate("/dashboard", { state: { finalAnalysis } });
       resetPage();
     }
 

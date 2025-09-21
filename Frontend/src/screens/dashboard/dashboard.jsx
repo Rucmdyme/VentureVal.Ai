@@ -7,15 +7,22 @@ import EventIcon from "@mui/icons-material/Event";
 import InvestmentScore from "../../components/investmentScore";
 import CustomTabs from "../../components/customTabs";
 import { tabsConfig } from "./constant";
-import {
-  marketData,
-  revenueData,
-} from "../../components/dealSummary/constants";
 import DealNoteSummary from "../../components/dealSummary/dealSummary";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import BenchmarkingTable from "../../components/dealSummary/benchmarking/benchmarking";
+import Insights from "../../components/insights/insights";
+import RiskAssessmentRadar from "../../components/risks/riskAssesmentRadar";
 
 export default function Dashboard() {
+  const location = useLocation();
+  const { finalAnalysis } = location.state || {};
+  const {
+    benchmarking,
+    deal_note: dealNote,
+    risk_assessment: riskAssessment,
+    weighted_scores: weightedScores,
+  } = finalAnalysis;
+
   const [tab, setTab] = useState("summary");
   const navigate = useNavigate();
 
@@ -55,29 +62,33 @@ export default function Dashboard() {
           <Grid item size={{ xs: 12, md: 8.5 }}>
             <Box>
               <Typography sx={{ fontSize: 24, fontWeight: 600, mb: 0.5 }}>
-                TechStart AI
+                {dealNote?.company_name || "NA"}
               </Typography>
               <Stack direction="row" spacing={1}>
-                <Chip
-                  size="small"
-                  label="AI-Powered SaaS Platform"
-                  variant="outlined"
-                  sx={{
-                    color: "rgba(156, 39, 176, 1)",
-                    borderColor: "rgba(156, 39, 176, 0.5)",
-                    backgroundColor: "rgba(156, 39, 176, 0.04)",
-                  }}
-                />
-                <Chip
-                  size="small"
-                  label="Series A"
-                  variant="outlined"
-                  sx={{
-                    color: "rgba(156, 39, 176, 1)",
-                    borderColor: "rgba(156, 39, 176, 0.5)",
-                    backgroundColor: "rgba(156, 39, 176, 0.04)",
-                  }}
-                />
+                {finalAnalysis?.deal_note?.summary_stats?.sector && (
+                  <Chip
+                    size="small"
+                    label={finalAnalysis.deal_note.summary_stats.sector}
+                    variant="outlined"
+                    sx={{
+                      color: "rgba(156, 39, 176, 1)",
+                      borderColor: "rgba(156, 39, 176, 0.5)",
+                      backgroundColor: "rgba(156, 39, 176, 0.04)",
+                    }}
+                  />
+                )}
+                {finalAnalysis?.deal_note?.summary_stats?.stage && (
+                  <Chip
+                    size="small"
+                    label={finalAnalysis.deal_note.summary_stats.stage}
+                    variant="outlined"
+                    sx={{
+                      color: "rgba(156, 39, 176, 1)",
+                      borderColor: "rgba(156, 39, 176, 0.5)",
+                      backgroundColor: "rgba(156, 39, 176, 0.04)",
+                    }}
+                  />
+                )}
               </Stack>
               <Stack
                 direction="row"
@@ -85,30 +96,27 @@ export default function Dashboard() {
                 alignItems="center"
                 sx={{ color: "#444444", fontSize: 14, my: 1 }}
               >
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <LocationOnIcon sx={{ fontSize: 18 }} />
-                  <Typography variant="body2">Bangalore, India</Typography>
-                </Stack>
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <EventIcon sx={{ fontSize: 18 }} />
-                  <Typography variant="body2">Founded Q4 2023</Typography>
-                </Stack>
+                {dealNote?.summary_stats?.geography && (
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <LocationOnIcon sx={{ fontSize: 18 }} />
+                    <Typography variant="body2">
+                      {dealNote?.summary_stats?.geography}
+                    </Typography>
+                  </Stack>
+                )}
+                {dealNote?.summary_stats?.founded_year && (
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <EventIcon sx={{ fontSize: 18 }} />
+                    <Typography variant="body2">{`Founded in ${dealNote?.summary_stats?.founded_year}`}</Typography>
+                  </Stack>
+                )}
               </Stack>
             </Box>
-            <Typography sx={{ pr: 16, mt: 4, fontSize: 14 }}>
-              Sia operates in the high-growth AI/ML, Data Analytics, and
-              Enterprise SaaS sectors, aiming to provide advanced data solutions
-              for businesses. As a seed-stage company, it targets enterprises
-              seeking to leverage data for improved decision-making and
-              operational efficiency. While specific products are not detailed,
-              its focus is likely on platforms or tools that streamline data
-              analysis and machine learning integration. With 6 existing
-              customers, Sia is attempting to establish its market presence,
-              despite currently reporting no revenue. The competitive landscape
-              includes established players like Alteryx and Dataiku,
-              necessitating a strong differentiation strategy to capture a share
-              of the $300 billion market.
-            </Typography>
+            {dealNote?.company_description && (
+              <Typography sx={{ pr: { xs: 0, md: 16 }, mt: 4, fontSize: 14 }}>
+                {dealNote?.company_description}
+              </Typography>
+            )}
           </Grid>
           <Grid
             item
@@ -116,24 +124,41 @@ export default function Dashboard() {
             sx={{ alignItems: "center", display: "flex" }}
           >
             <Box>
-              <Box
-                sx={{
-                  mb: 4,
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                <Chip
-                  size="small"
-                  label="CONSIDER"
-                  color="primary"
-                  sx={{ p: 0.5, fontSize: 12, mr: 2 }}
+              {dealNote?.summary_stats?.recommendation_tier && (
+                <Box
+                  sx={{
+                    mb: 4,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <Chip
+                    size="small"
+                    label={dealNote?.summary_stats?.recommendation_tier}
+                    sx={{
+                      p: 0.5,
+                      fontSize: 12,
+                      mr: 2,
+                      bgcolor:
+                        dealNote?.summary_stats?.recommendation_tier ===
+                        "CONSIDER"
+                          ? "primary.main"
+                          : dealNote?.summary_stats === "PASS"
+                          ? "#d32f2f"
+                          : "#2e7d32",
+                      color: "white",
+                    }}
+                  />
+                  <Typography sx={{ fontSize: 16 }}>
+                    Investment Recommendation
+                  </Typography>
+                </Box>
+              )}
+              {dealNote?.summary_stats?.overall_score && (
+                <InvestmentScore
+                  score={dealNote?.summary_stats?.overall_score}
                 />
-                <Typography sx={{ fontSize: 16 }}>
-                  Investment Recommendation
-                </Typography>
-              </Box>
-              <InvestmentScore score={8.1} />
+              )}
             </Box>
           </Grid>
         </Grid>
@@ -142,9 +167,15 @@ export default function Dashboard() {
       <CustomTabs tab={tab} setTab={setTab} tabsConfig={tabsConfig} />
 
       {tab === "summary" && (
-        <DealNoteSummary revenueData={revenueData} marketData={marketData} />
+        <DealNoteSummary dealNote={dealNote} weightedScores={weightedScores} />
       )}
-      {tab === "benchmarks" && <BenchmarkingTable />}
+      {tab === "risk" && (
+        <RiskAssessmentRadar riskAssessment={riskAssessment} />
+      )}
+      {tab === "benchmarks" && (
+        <BenchmarkingTable benchMarking={benchmarking} />
+      )}
+      {tab === "insights" && <Insights insightsData={benchmarking?.insights} />}
     </Box>
   );
 }
