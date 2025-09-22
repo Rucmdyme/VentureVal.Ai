@@ -80,15 +80,12 @@ async def agent_chat(request: ChatRequest):
         # Build enhanced context prompt
         context_prompt = await build_context_prompt(analysis_data)
         
-        # Generate AI response
-        ai_response = await generate_ai_response(context_prompt, request.question.strip())
-        
-        # Generate contextual follow-up suggestions
-        suggestions = await generate_follow_up_questions(analysis_data, request.question.strip())
+        # Generate AI response with suggestions in a single API call
+        ai_result = await generate_ai_response_with_suggestions(context_prompt, request.question.strip(), analysis_data)
 
         return ChatResponse(
-            response=ai_response,
-            suggested_questions=suggestions,
+            response=ai_result['response'],
+            suggested_questions=ai_result['suggested_questions'],
             analysis_id=request.analysis_id
         )
         
@@ -290,10 +287,30 @@ async def build_context_prompt(analysis_data: Dict[str, Any]) -> str:
         logger.error(f"Error building context prompt: {str(e)}")
         return f"Limited context available for {analysis_data.get('company_name', 'this company')}."
 
-async def generate_ai_response(context_prompt: str, question: str) -> str:
-    """Generate AI response with enhanced prompting and error handling"""
+async def generate_ai_response_with_suggestions(context_prompt: str, question: str, analysis_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate AI response with suggested questions in a single API call"""
     
     try:
+        # Extract key data for context
+        company_name = analysis_data.get('company_name', 'this company')
+        processed_data = analysis_data.get('processed_data', {})
+        synthesized_data = processed_data.get('synthesized_data', {})
+        sector = synthesized_data.get('sector', '')
+        stage = synthesized_data.get('stage', '')
+        
+        # Extract scores and recommendation
+        risk_score = safe_float_convert(
+            analysis_data.get('risk_assessment', {}).get('overall_risk_score', 0)
+        )
+        overall_score = safe_float_convert(
+            analysis_data.get('weighted_scores', {}).get('overall_score', 0)
+        )
+        recommendation = analysis_data.get('weighted_scores', {}).get('recommendation', {})
+        tier = recommendation.get('tier', 'N/A') if isinstance(recommendation, dict) else str(recommendation)
+        
+        # Categorize current question
+        question_category = categorize_question(question)
+        
         # Use async executor for AI generation
         def _generate_response():
             configure_gemini()
@@ -303,7 +320,7 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
                 location=GCP_REGION
             )
             
-            # Enhanced prompt with specific instructions
+            # Enhanced prompt with specific instructions for both response and suggestions
             full_prompt = f"""{context_prompt}
 
                 CONVERSATION CONTEXT:
@@ -311,7 +328,16 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
 
                 INVESTOR QUESTION: "{question}"
 
-                CRITICAL INSTRUCTION: Your response must be between 30-150 words maximum. Be direct, precise, and eliminate any unnecessary elaboration.
+                ADDITIONAL CONTEXT FOR SUGGESTIONS:
+                - Company: {company_name}
+                - Sector: {sector}
+                - Stage: {stage}
+                - Investment Score: {overall_score:.1f}/10
+                - Risk Score: {risk_score:.1f}/10
+                - Recommendation: {tier}
+                - Question Category: {question_category}
+
+                CRITICAL INSTRUCTION: You must provide BOTH a response to the question AND 4 suggested follow-up questions in a specific JSON format.
 
                 RESPONSE HANDLING GUIDELINES:
 
@@ -352,7 +378,39 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
                 • WORD COUNT LIMIT: Maximum 150 words, target 40-130 words
                 • IMPORTANT: Complete your response fully within the word limit
 
-                INVESTMENT ANALYST RESPONSE:"""
+                SUGGESTED QUESTIONS REQUIREMENTS:
+                Generate 4 highly relevant follow-up questions that an investor would naturally ask next. Focus on:
+                1. Investment decision-making factors
+                2. Due diligence priorities
+                3. Risk assessment and mitigation
+                4. Return potential and exit strategy
+                5. Competitive positioning and market dynamics
+                6. Management team and execution capability
+
+                Requirements for suggestions:
+                - Questions should be specific to this company's situation
+                - Focus on actionable investment insights
+                - Consider the recommendation tier ({tier}) when framing questions
+                - Address potential investor concerns
+                - Help investors make informed decisions
+                - Be professional and direct
+                - Avoid questions too similar to the current question
+                - Each suggested question must be between 10-30 words maximum
+                - Keep questions concise and focused for better user experience
+
+                MANDATORY JSON OUTPUT FORMAT:
+                You MUST respond with a valid JSON object in exactly this format:
+                {{
+                    "response": "Your 30-150 word response to the investor question here",
+                    "suggested_questions": [
+                        "First suggested follow-up question",
+                        "Second suggested follow-up question", 
+                        "Third suggested follow-up question",
+                        "Fourth suggested follow-up question"
+                    ]
+                }}
+
+                IMPORTANT: Your entire output must be valid JSON. Do not include any text before or after the JSON object."""
             
                             
             generation_config = types.GenerateContentConfig(
@@ -382,13 +440,25 @@ async def generate_ai_response(context_prompt: str, question: str) -> str:
             raise HTTPException(status_code=500, detail="AI model returned empty response")
         
         # Parse and validate JSON response
-        try:            
-            # Clean and sanitize the response for frontend consumption
-            return sanitize_for_frontend(response_text.strip())
+        try:
+            response = sanitize_for_frontend(response_text.strip()) 
+            validated_suggestions = [] 
+            if isinstance(response['suggested_questions'], list):         
+                validated_suggestions = response['suggested_questions'][:4]
+            if len(validated_suggestions)>=4:
+                return response
             
+            # Generate context-based default questions if needed
+            context_defaults = generate_context_based_defaults(
+                question, question_category, tier, overall_score, risk_score, 
+                company_name, sector, stage, analysis_data
+            )
+            validated_suggestions.extend(context_defaults)
+            response['suggested_questions'] = validated_suggestions[:4]
+            return response
         except Exception as e:
             logger.error(f"Response parsing error: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Failed to parse AI response text")
+            raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {str(e)}")
         
     except Exception as e:
         logger.error(f"AI generation error: {str(e)}")
@@ -415,49 +485,16 @@ def categorize_question(question: str) -> str:
     
     return 'general'
 
-async def generate_follow_up_questions(analysis_data: Dict[str, Any], current_question: str) -> List[str]:
-    """Generate intelligent follow-up questions based on analysis insights and investment decision factors"""
+def generate_context_based_defaults(current_question: str, question_category: str, tier: str, overall_score: float, 
+                                   risk_score: float, company_name: str, sector: str, 
+                                   stage: str, analysis_data: Dict[str, Any]) -> List[str]:
+    """Generate context-based default questions based on analysis data and question category"""
     
     try:
-        # Extract key data for context
-        company_name = analysis_data.get('company_name', 'this company')
+        # Extract additional context
         processed_data = analysis_data.get('processed_data', {})
         synthesized_data = processed_data.get('synthesized_data', {})
-        sector = synthesized_data.get('sector', '')
-        stage = synthesized_data.get('stage', '')
-        
-        # Extract scores and recommendation
-        risk_score = safe_float_convert(
-            analysis_data.get('risk_assessment', {}).get('overall_risk_score', 0)
-        )
-        overall_score = safe_float_convert(
-            analysis_data.get('weighted_scores', {}).get('overall_score', 0)
-        )
-        recommendation = analysis_data.get('weighted_scores', {}).get('recommendation', {})
-        tier = recommendation.get('tier', 'N/A') if isinstance(recommendation, dict) else str(recommendation)
-        
-        # Extract financial metrics for context
         financials = synthesized_data.get('financials', {})
-        revenue = financials.get('revenue')
-        growth_rate = financials.get('growth_rate')
-        burn_rate = financials.get('burn_rate')
-        runway = financials.get('runway_months')
-        
-        # Categorize current question
-        question_category = categorize_question(current_question)
-        
-        # Generate smart follow-ups using AI
-        try:
-            smart_suggestions = await generate_ai_follow_ups(
-                analysis_data, current_question, question_category, 
-                company_name, sector, tier, overall_score, risk_score
-            )
-            if smart_suggestions:
-                return smart_suggestions
-        except Exception as e:
-            logger.warning(f"AI follow-up generation failed: {e}")
-        
-        # Fallback to rule-based suggestions
         suggestions = []
         
         # Investment decision-focused questions based on analysis results
@@ -477,11 +514,16 @@ async def generate_follow_up_questions(analysis_data: Dict[str, Any], current_qu
             suggestions.extend([
                 "What additional information would tip the decision?",
                 "What are the key risk mitigation strategies?",
-                "How does this compare to other opportunities in our pipeline?"
+                "How does this compare to other pipeline opportunities?"
             ])
         
         # Category-specific intelligent follow-ups
         if question_category == 'financial':
+            revenue = financials.get('revenue')
+            growth_rate = financials.get('growth_rate')
+            burn_rate = financials.get('burn_rate')
+            runway = financials.get('runway_months')
+            
             if revenue and growth_rate:
                 suggestions.append("Is this growth rate sustainable given the current market conditions?")
             if burn_rate and runway:
@@ -571,7 +613,7 @@ async def generate_follow_up_questions(analysis_data: Dict[str, Any], current_qu
         return unique_suggestions[:4]
         
     except Exception as e:
-        logger.warning(f"Error generating follow-up questions: {str(e)}")
+        logger.warning(f"Error generating context-based defaults: {str(e)}")
         return [
             "What are the critical investment considerations?",
             "How does this align with our investment strategy?",
@@ -579,82 +621,6 @@ async def generate_follow_up_questions(analysis_data: Dict[str, Any], current_qu
             "What are the key decision points for this opportunity?"
         ]
 
-async def generate_ai_follow_ups(analysis_data: Dict, current_question: str, category: str, 
-                               company_name: str, sector: str, tier: str, 
-                               overall_score: float, risk_score: float) -> List[str]:
-    """Generate AI-powered follow-up questions based on analysis context"""
-    
-    try:
-        def _generate_follow_ups():
-            configure_gemini()
-            model = genai.Client(
-                vertexai=True,
-                project=PROJECT_ID,
-                location=GCP_REGION
-            )
-            
-            prompt = f"""
-                You are an experienced investment partner generating follow-up questions for an investor evaluating {company_name}.
-
-                ANALYSIS CONTEXT:
-                - Company: {company_name}
-                - Sector: {sector}
-                - Investment Score: {overall_score:.1f}/10
-                - Risk Score: {risk_score:.1f}/10
-                - Recommendation: {tier}
-                - Question Category: {category}
-
-                CURRENT QUESTION: "{current_question}"
-
-                Generate 4 highly relevant follow-up questions that an investor would naturally ask next. Focus on:
-
-                1. Investment decision-making factors
-                2. Due diligence priorities
-                3. Risk assessment and mitigation
-                4. Return potential and exit strategy
-                5. Competitive positioning and market dynamics
-                6. Management team and execution capability
-
-                Requirements:
-                - Questions should be specific to this company's situation
-                - Focus on actionable investment insights
-                - Consider the recommendation tier ({tier}) when framing questions
-                - Address potential investor concerns
-                - Help investors make informed decisions
-                - Be professional and direct
-
-                Return exactly 4 questions as a JSON array: ["question1", "question2", "question3", "question4"]
-            """
-            
-            response = model.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[prompt],
-                config=types.GenerateContentConfig(
-                    temperature=0.4,
-                    max_output_tokens=500,
-                    top_p=0.9
-                )
-            )
-            
-            return response.text
-        
-        response_text = await asyncio.get_event_loop().run_in_executor(None, _generate_follow_ups)
-        
-        if response_text:
-            # Extract JSON array from response
-            import re
-            json_match = re.search(r'\[(.*?)\]', response_text, re.DOTALL)
-            if json_match:
-                json_str = '[' + json_match.group(1) + ']'
-                questions = json.loads(json_str)
-                if isinstance(questions, list) and len(questions) >= 3:
-                    return questions[:4]
-        
-        return None
-        
-    except Exception as e:
-        logger.warning(f"AI follow-up generation error: {e}")
-        return None
 
 def safe_float_convert(value: Any) -> float:
     """Safely convert value to float with fallback"""
