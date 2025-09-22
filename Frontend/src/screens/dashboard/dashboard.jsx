@@ -149,7 +149,8 @@ export default function Dashboard() {
                         dealNote?.summary_stats?.recommendation_tier ===
                         "CONSIDER"
                           ? "primary.main"
-                          : dealNote?.summary_stats === "PASS"
+                          : dealNote?.summary_stats?.recommendation_tier ===
+                            "PASS"
                           ? "#d32f2f"
                           : "#2e7d32",
                       color: "white",
