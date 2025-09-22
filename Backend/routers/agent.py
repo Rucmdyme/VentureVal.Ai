@@ -63,6 +63,8 @@ QUESTION_CATEGORIES = {
 async def agent_chat(request: ChatRequest):
     """Handle agent conversations with comprehensive analysis context"""
     
+    analysis_data = None
+    
     try:
         # Enhanced input validation
         if not request.analysis_id or not request.analysis_id.strip():
@@ -74,26 +76,55 @@ async def agent_chat(request: ChatRequest):
         if len(request.question.strip()) > 1000:
             raise HTTPException(status_code=400, detail="Question too long (max 1000 characters)")
         
-        # Get analysis context asynchronously
+        # Get analysis context asynchronously (single fetch)
         analysis_data = await get_analysis_data(request.analysis_id.strip())
         
         # Build enhanced context prompt
         context_prompt = await build_context_prompt(analysis_data)
         
         # Generate AI response with suggestions in a single API call
-        ai_result = await generate_ai_response_with_suggestions(context_prompt, request.question.strip(), analysis_data)
-
-        return ChatResponse(
-            response=ai_result['response'],
-            suggested_questions=ai_result['suggested_questions'],
-            analysis_id=request.analysis_id
-        )
+        try:
+            ai_result = await generate_ai_response_with_suggestions(context_prompt, request.question.strip(), analysis_data)
+            return ChatResponse(
+                response=ai_result['response'],
+                suggested_questions=ai_result['suggested_questions'],
+                analysis_id=request.analysis_id
+            )
+        except Exception as ai_error:
+            logger.error(f"AI generation failed: {str(ai_error)}")
+            # Return default response when AI fails (using already fetched analysis_data)
+            default_result = generate_default_response(request.question.strip(), analysis_data)
+            return ChatResponse(
+                response=default_result['response'],
+                suggested_questions=default_result['suggested_questions'],
+                analysis_id=request.analysis_id
+            )
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Unexpected error in agent_chat: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error occurred")
+        # Return default response for any unexpected errors
+        if analysis_data:
+            # Use already fetched analysis data if available
+            default_result = generate_default_response(request.question.strip(), analysis_data)
+            return ChatResponse(
+                response=default_result['response'],
+                suggested_questions=default_result['suggested_questions'],
+                analysis_id=request.analysis_id
+            )
+        else:
+            # Final fallback if analysis data was never fetched
+            return ChatResponse(
+                response="I apologize, but I'm currently unable to provide a detailed response due to technical difficulties. However, I'm here to help you analyze this investment opportunity once the issue is resolved.",
+                suggested_questions=[
+                    "What are the key financial metrics for this company?",
+                    "What are the main investment risks to consider?",
+                    "How does this opportunity compare to market benchmarks?",
+                    "What is the overall investment recommendation?"
+                ],
+                analysis_id=request.analysis_id
+            )
 
 async def get_analysis_data(analysis_id: str) -> Dict[str, Any]:
     """Retrieve and validate analysis data"""
@@ -458,11 +489,13 @@ async def generate_ai_response_with_suggestions(context_prompt: str, question: s
             return response
         except Exception as e:
             logger.error(f"Response parsing error: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {str(e)}")
+            # If parsing fails, raise exception to trigger default response
+            raise Exception(f"Failed to parse AI response: {str(e)}")
         
     except Exception as e:
         logger.error(f"AI generation error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to generate AI response")
+        # Re-raise the exception to be caught by the calling function
+        raise Exception(f"AI generation failed: {str(e)}")
 
 def categorize_question(question: str) -> str:
     """Categorize question to generate relevant follow-ups with weighted scoring"""
@@ -747,3 +780,76 @@ def format_benchmark_performance(benchmarking: Dict[str, Any]) -> str:
     except Exception as e:
         logger.warning(f"Error formatting benchmarks: {e}")
         return "• Benchmark formatting error - raw data available in analysis"
+
+def generate_default_response(question: str, analysis_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate default response when AI fails, with context-aware suggestions"""
+    
+    try:
+        # Extract basic company info
+        company_name = analysis_data.get('company_name', 'this company')
+        processed_data = analysis_data.get('processed_data', {})
+        synthesized_data = processed_data.get('synthesized_data', {})
+        
+        # Extract key metrics for context
+        overall_score = safe_float_convert(
+            analysis_data.get('weighted_scores', {}).get('overall_score', 0)
+        )
+        risk_score = safe_float_convert(
+            analysis_data.get('risk_assessment', {}).get('overall_risk_score', 0)
+        )
+        recommendation = analysis_data.get('weighted_scores', {}).get('recommendation', {})
+        tier = recommendation.get('tier', 'N/A') if isinstance(recommendation, dict) else str(recommendation)
+        
+        sector = synthesized_data.get('sector', 'Unknown')
+        stage = synthesized_data.get('stage', 'Unknown')
+        
+        # Categorize the question to provide relevant context
+        question_category = categorize_question(question)
+        
+        # Generate contextual default response
+        default_response = f"I apologize, but I'm currently experiencing technical difficulties providing a detailed response to your question about {company_name}. However, I have comprehensive analysis data available and will be able to assist you shortly. The analysis shows this is a {tier.lower()} opportunity with an overall score of {overall_score:.1f}/10."
+        
+        # Generate context-aware suggested questions based on analysis data
+        suggested_questions = generate_context_based_defaults(
+            question, question_category, tier, overall_score, risk_score,
+            company_name, sector, stage, analysis_data
+        )
+        
+        # Ensure we have exactly 4 suggestions
+        if len(suggested_questions) < 4:
+            # Add generic investment questions if needed
+            generic_questions = [
+                f"What are the key strengths of {company_name}?",
+                f"What are the main risks associated with {company_name}?",
+                f"How does {company_name} compare to competitors?",
+                f"What is the investment thesis for {company_name}?",
+                "What are the financial highlights from the analysis?",
+                "What market opportunities does this company address?",
+                "What is the management team's track record?",
+                "What are the growth prospects and scalability factors?"
+            ]
+            
+            # Add unique questions not already in suggestions
+            for q in generic_questions:
+                if len(suggested_questions) >= 4:
+                    break
+                if q not in suggested_questions:
+                    suggested_questions.append(q)
+        
+        return {
+            'response': default_response,
+            'suggested_questions': suggested_questions[:4]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating default response: {str(e)}")
+        # Ultimate fallback
+        return {
+            'response': "I apologize, but I'm currently unable to provide a detailed response due to technical difficulties. However, I'm here to help you analyze this investment opportunity once the issue is resolved.",
+            'suggested_questions': [
+                "What are the key financial metrics for this company?",
+                "What are the main investment risks to consider?",
+                "How does this opportunity compare to market benchmarks?",
+                "What is the overall investment recommendation?"
+            ]
+        }
