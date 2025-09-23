@@ -203,9 +203,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         except Exception as e:
             logger.warning(f"Deal note generation failed for {analysis_id}: {e}")
             deal_note = {"error": "Deal note generation failed", "details": str(e)}
-            
-        await update_progress(analysis_id, 100, "Analysis complete")
-        
+                    
         # Store final results
         final_results = {
             'status': 'completed',
@@ -216,7 +214,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
             'deal_note': deal_note,
             'completed_at': datetime.now(),
             'progress': 100,
-            'progress_message': 'Analysis completed successfully',
+            'message': 'Analysis completed successfully',
             'error': None
         }
         
