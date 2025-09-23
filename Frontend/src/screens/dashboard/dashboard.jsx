@@ -1,5 +1,13 @@
 import React, { useState } from "react";
-import { Box, Typography, Button, Grid, Chip, Stack } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Button,
+  Grid,
+  Chip,
+  Stack,
+  Tooltip,
+} from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
 import { ArrowBack } from "@mui/icons-material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
@@ -35,20 +43,29 @@ export default function Dashboard() {
           onClick={() => navigate("/")}
         />
         <Typography>Back to Upload</Typography>
-        <Button
-          sx={{
-            ml: "auto",
-            bgcolor: "black",
-            color: "white",
-            borderRadius: 2,
-            textTransform: "none",
-          }}
-          size="small"
-          variant="outlined"
-          startIcon={<DownloadIcon />}
-        >
-          Download Report
-        </Button>
+        <Tooltip title="Coming soon!">
+          <Box sx={{ ml: "auto" }}>
+            <Button
+              sx={{
+                bgcolor: "black",
+                color: "white",
+                borderRadius: 2,
+                textTransform: "none",
+                "&.Mui-disabled": {
+                  bgcolor: "grey.300",
+                  color: "grey.600",
+                  borderColor: "grey.400",
+                },
+              }}
+              disabled
+              size="small"
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+            >
+              Download Report
+            </Button>
+          </Box>
+        </Tooltip>
       </Box>
       <Box
         sx={{
