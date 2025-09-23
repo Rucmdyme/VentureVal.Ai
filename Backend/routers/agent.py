@@ -701,7 +701,9 @@ def format_number(value: Any) -> str:
     
     try:
         num_value = float(value)
-        if num_value >= 1_000_000:
+        if num_value >= 1_000_000_000:
+            return f"{num_value / 1_000_000_000:.1f}B"
+        elif num_value >= 1_000_000:
             return f"{num_value / 1_000_000:.1f}M"
         elif num_value >= 1_000:
             return f"{num_value / 1_000:.0f}K"
