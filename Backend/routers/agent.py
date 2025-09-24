@@ -145,7 +145,7 @@ async def get_analysis_data(analysis_id: str) -> Dict[str, Any]:
         if not analysis_data:
             raise HTTPException(status_code=404, detail="Analysis data is empty")
             
-        if analysis_data.get('status') != 'completed':
+        if analysis_data.get('progress') < 30:
             current_status = analysis_data.get('status', 'unknown')
             raise HTTPException(
                 status_code=400, 
