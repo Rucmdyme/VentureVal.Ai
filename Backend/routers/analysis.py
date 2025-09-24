@@ -149,7 +149,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         if not processed_data or 'synthesized_data' not in processed_data:
             raise ValueError("Document processing failed - no synthesized data extracted")
             
-        await update_progress(analysis_id, 30, "Documents processed")
+        await update_progress(analysis_id, 30, "Documents processed", processed_data=processed_data)
         
         synthesized_data = processed_data['synthesized_data']
         
@@ -160,7 +160,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         except Exception as e:
             raise ValueError(f"Risk analysis failed: {str(e)}")
             
-        await update_progress(analysis_id, 55, "Risk assessment complete")
+        await update_progress(analysis_id, 55, "Risk assessment complete", risk_assessment = risk_results)
         
         # Step 3: Benchmarking
         await update_progress(analysis_id, 60, "Running benchmarks...")
@@ -173,7 +173,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         except Exception as e:
             raise ValueError(f"Benchmarking failed: {str(e)}")
             
-        await update_progress(analysis_id, 75, "Benchmarking complete")
+        await update_progress(analysis_id, 75, "Benchmarking complete", benchmarking=benchmark_results)
         
         # Step 4: Weighted Scoring
         await update_progress(analysis_id, 80, "Calculating scores...")
@@ -189,7 +189,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         except Exception as e:
             raise ValueError(f"Score calculation failed: {str(e)}")
             
-        await update_progress(analysis_id, 90, "Scoring complete")
+        await update_progress(analysis_id, 90, "Scoring complete", weighted_scores=weighted_scores)
         
         # Step 5: Deal Note Generation
         await update_progress(analysis_id, 95, "Generating deal note...")
@@ -207,10 +207,6 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         # Store final results
         final_results = {
             'status': 'completed',
-            'processed_data': processed_data,
-            'risk_assessment': risk_results,
-            'benchmarking': benchmark_results,
-            'weighted_scores': weighted_scores,
             'deal_note': deal_note,
             'completed_at': datetime.now(),
             'progress': 100,
