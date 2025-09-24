@@ -33,7 +33,7 @@ class AnalysisResponse(BaseModel):
 class ChatRequest(BaseModel):
     analysis_id: str
     question: str
-    context: Optional[Dict[str, Any]] = {}
+    chat_history: Optional[List[Dict]] = []
 
 class ChatResponse(BaseModel):
     response: str
