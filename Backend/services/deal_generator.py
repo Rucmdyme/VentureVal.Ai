@@ -38,6 +38,24 @@ def async_timeout(seconds: int):
         return wrapper
     return decorator
 
+def format_large_number(value: Any) -> Any:
+    """Format large numbers with appropriate units (B, M, K) for display"""
+    if value is None:
+        return None
+    
+    try:
+        num_value = float(value)
+        if num_value >= 1_000_000_000:
+            return f"{num_value / 1_000_000_000:.1f}B"
+        elif num_value >= 1_000_000:
+            return f"{num_value / 1_000_000:.1f}M"
+        elif num_value >= 1_000:
+            return f"{num_value / 1_000:.0f}K"
+        else:
+            return num_value
+    except (ValueError, TypeError):
+        return value
+
 class DealNoteGenerator:
     def __init__(self, config: Optional[DealNoteConfig] = None):
         self.config = config or DealNoteConfig()
@@ -216,12 +234,24 @@ class DealNoteGenerator:
                 'synthesized_customers': startup_data.get('synthesized_data', {}).get('traction', {}).get('customers'),
             }
             
+            # Define keys that should be formatted as large numbers (B, M, K)
+            large_number_keys = {
+                'revenue', 'monthly_revenue', 'annual_revenue', 'funding_raised', 'funding_seeking', 
+                'valuation', 'mrr', 'arr', 'market_size', 'tam', 'sam', 'som', 'customers', 
+                'active_users', 'monthly_active_users', 'daily_active_users', 'synthesized_revenue', 
+                'synthesized_customers', 'cac', 'ltv'
+            }
+            
             # Filter out None values and keep only numerical data
             numerical_stats = {}
             for key, value in stats.items():
                 try:
                     if value is not None and isinstance(value, (int, float)):
-                        numerical_stats[key] = value
+                        # Apply formatting for large numbers
+                        if key in large_number_keys:
+                            numerical_stats[key] = format_large_number(value)
+                        else:
+                            numerical_stats[key] = value
                     elif value is not None and isinstance(value, list):
                         # Keep list data for revenue projections
                         if key in ['revenue_projections']:
@@ -232,7 +262,12 @@ class DealNoteGenerator:
                         # Check if it's a valid number (including decimals and negative numbers)
                         if clean_value and (clean_value.replace('.', '').replace('-', '').isdigit() or 
                                            (clean_value.count('.') == 1 and clean_value.replace('.', '').replace('-', '').isdigit())):
-                            numerical_stats[key] = float(clean_value)
+                            converted_value = float(clean_value)
+                            # Apply formatting for large numbers
+                            if key in large_number_keys:
+                                numerical_stats[key] = format_large_number(converted_value)
+                            else:
+                                numerical_stats[key] = converted_value
                 except (ValueError, AttributeError, TypeError) as e:
                     # Log the conversion failure for debugging
                     logger.debug(f"Failed to convert '{value}' to number for key '{key}': {e}")
@@ -305,7 +340,7 @@ class DealNoteGenerator:
                         try:
                             year = int(item['year'])
                             number = float(item['number']) if item['number'] is not None else None
-                            if number is not None and year >= 2020 and year <= 2030:  # Reasonable year range
+                            if number is not None:  # Reasonable year range
                                 formatted_projections.append({
                                     'year': year,
                                     'number': number
