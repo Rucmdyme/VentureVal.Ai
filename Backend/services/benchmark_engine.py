@@ -69,11 +69,11 @@ class BenchmarkEngine:
             Return ONLY valid JSON in this EXACT format with NUMERIC VALUES ONLY (no strings, no text descriptions):
             {{
                 "revenue_multiples": {{
-                    "p10": "10th percentile annual revenue in multiples",
-                    "p25": "25th percentile annual revenue in multiples", 
-                    "p50": "50th percentile (median) annual revenue in multiples",
-                    "p75": "75th percentile annual revenue in multiples",
-                    "p90": "90th percentile annual revenue in multiples"
+                    "p10": "10th percentile annual revenue in USD",
+                    "p25": "25th percentile annual revenue in USD", 
+                    "p50": "50th percentile (median) annual revenue in USD",
+                    "p75": "75th percentile annual revenue in USD",
+                    "p90": "90th percentile annual revenue in USD"
                 }},
                 "growth_rates": {{
                     "p10": "10th percentile annual revenue growth rate percentage",
@@ -104,18 +104,18 @@ class BenchmarkEngine:
                     "p90": "90th percentile runway in months"
                 }},
                 "valuation_millions": {{
-                    "p10": "10th percentile company valuation in millions USD",
-                    "p25": "25th percentile company valuation in millions USD",
-                    "p50": "50th percentile company valuation in millions USD",
-                    "p75": "75th percentile company valuation in millions USD", 
-                    "p90": "90th percentile company valuation in millions USD"
+                    "p10": "10th percentile company valuation in USD",
+                    "p25": "25th percentile company valuation in USD",
+                    "p50": "50th percentile company valuation in USD",
+                    "p75": "75th percentile company valuation in USD", 
+                    "p90": "90th percentile company valuation in USD"
                 }}
             }}
 
             CRITICAL REQUIREMENTS:
             1. ALL VALUES MUST BE NUMERIC ONLY - no strings, no text, no descriptions, no units
             2. Use integers for counts (team_sizes, runway_months, growth_rates)
-            3. Use decimals for financial metrics (revenue_multiples, valuation_millions, burn_rates_monthly)
+            3. Use decimals for financial metrics (revenue in USD, valuation in USD, burn rates in USD)
             4. Percentiles must be properly ordered (p10 < p25 < p50 < p75 < p90)
             5. All numbers must be realistic for {sector} companies in {geography}
             6. Consider current market conditions (2024-2025 funding environment)
@@ -481,17 +481,11 @@ class BenchmarkEngine:
     def get_default_benchmarks(self) -> Dict:
         """Enhanced fallback benchmarks"""
         return {
-            'revenue_multiples': {
-                'p10': 1, 'p25': 3, 'p50': 6, 'p75': 12, 'p90': 25
-            },
             'growth_rates': {
                 'p10': 20, 'p25': 50, 'p50': 100, 'p75': 200, 'p90': 400
             },
             'team_sizes': {
                 'p10': 3, 'p25': 8, 'p50': 15, 'p75': 30, 'p90': 60
-            },
-            'burn_rates_monthly': {
-                'p10': 15000, 'p25': 35000, 'p50': 75000, 'p75': 150000, 'p90': 300000
             },
             'runway_months': {
                 'p10': 6, 'p25': 12, 'p50': 18, 'p75': 24, 'p90': 36

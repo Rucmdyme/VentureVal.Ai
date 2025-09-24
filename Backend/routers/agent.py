@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from google import genai
 from google.genai import types
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 import logging
 import asyncio
@@ -79,12 +79,12 @@ async def agent_chat(request: ChatRequest):
         # Get analysis context asynchronously (single fetch)
         analysis_data = await get_analysis_data(request.analysis_id.strip())
         
-        # Build enhanced context prompt
-        context_prompt = await build_context_prompt(analysis_data)
+        # Build enhanced context prompt with chat history
+        context_prompt = await build_context_prompt(analysis_data, request.chat_history)
         
         # Generate AI response with suggestions in a single API call
         try:
-            ai_result = await generate_ai_response_with_suggestions(context_prompt, request.question.strip(), analysis_data)
+            ai_result = await generate_ai_response_with_suggestions(context_prompt, request.question.strip(), analysis_data, request.chat_history)
             return ChatResponse(
                 response=ai_result['response'],
                 suggested_questions=ai_result['suggested_questions'],
@@ -160,8 +160,8 @@ async def get_analysis_data(analysis_id: str) -> Dict[str, Any]:
         logger.error(f"Error retrieving analysis data: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve analysis data")
 
-async def build_context_prompt(analysis_data: Dict[str, Any]) -> str:
-    """Build comprehensive context prompt for AI with enhanced investment focus"""
+async def build_context_prompt(analysis_data: Dict[str, Any], chat_history: Optional[List[Dict]] = None) -> str:
+    """Build comprehensive context prompt for AI with enhanced investment focus and chat history"""
     
     try:
         # Safely extract data with defaults
@@ -221,9 +221,25 @@ async def build_context_prompt(analysis_data: Dict[str, Any]) -> str:
         operations = synthesized_data.get('operations', {})
         funding = synthesized_data.get('funding', {})
         
+        # Format chat history if provided
+        chat_history_context = ""
+        if chat_history and len(chat_history) > 0:
+            # Get last 10 conversations
+            recent_history = chat_history[-10:] if len(chat_history) > 10 else chat_history
+            chat_history_context = "\nRECENT CONVERSATION HISTORY:\n"
+            for i, message in enumerate(recent_history, 1):
+                role = message.get('role', 'unknown')
+                content = message.get('content', '')
+                if role == 'assistant':
+                    chat_history_context += f"            {i}. Dealio: {content}\n"
+                elif role == 'user':
+                    chat_history_context += f"            {i}. Investor: {content}\n"
+            chat_history_context += "\n"
+
         # Build context using only stored data
         context_prompt = f"""
             You are a senior investment analyst and startup advisor with 15+ years of experience in venture capital. You have conducted a comprehensive analysis of {company_name} and are now answering investor questions with professional expertise. You are a friendly, approachable investment professional who maintains warm relationships while providing data-driven insights.
+            {chat_history_context}
 
             COMPANY PROFILE:
             • Company: {company_name}
@@ -318,7 +334,7 @@ async def build_context_prompt(analysis_data: Dict[str, Any]) -> str:
         logger.error(f"Error building context prompt: {str(e)}")
         return f"Limited context available for {analysis_data.get('company_name', 'this company')}."
 
-async def generate_ai_response_with_suggestions(context_prompt: str, question: str, analysis_data: Dict[str, Any]) -> Dict[str, Any]:
+async def generate_ai_response_with_suggestions(context_prompt: str, question: str, analysis_data: Dict[str, Any], chat_history: Optional[List[Dict]] = None) -> Dict[str, Any]:
     """Generate AI response with suggested questions in a single API call"""
     
     try:
@@ -356,6 +372,8 @@ async def generate_ai_response_with_suggestions(context_prompt: str, question: s
 
                 CONVERSATION CONTEXT:
                 This is a Q&A session with an investor who is evaluating this company for potential investment. You are a professional investment analyst friend who provides data-driven insights to make informed investment decisions. The investor values CONCISE, FOCUSED answers.
+                
+                {"IMPORTANT: Review the recent conversation history above between DEALIO(my chatbot) and Investor to maintain context and avoid repeating information already discussed. Build upon previous exchanges naturally." if chat_history and len(chat_history) > 0 else ""}
 
                 INVESTOR QUESTION: "{question}"
 
