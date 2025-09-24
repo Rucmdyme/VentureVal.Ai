@@ -196,8 +196,7 @@ class DealNoteGenerator:
                 'revenue_projections': financials.get('revenue_projections'),
                 
                 # Market metrics
-                'market_size': market.get('size'),
-                'tam': market.get('tam'),
+                'tam': market.get('size'),
                 'sam': market.get('sam'),
                 'som': market.get('som'),
                 'market_growth_rate': market.get('growth_rate'),
