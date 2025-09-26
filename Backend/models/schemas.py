@@ -1,9 +1,9 @@
-# Pydantic models
 
 # models/schemas.py
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr, validator
 from typing import List, Optional, Dict, Any
 from enum import Enum
+import re
 
 class WeightingConfig(BaseModel):
     profile_name: str = "Default (Custom)"
@@ -50,3 +50,39 @@ class FileType(str, Enum):
 class DocumentUploadRequest(BaseModel):
     filename: str
     file_type: FileType = Field(..., description="Type of document being uploaded")
+
+# User schemas for user management
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: str
+    role: str
+    location: Optional[str] = None
+    @validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        return v
+    @validator('role')
+    def validate_role(cls, v):
+        allowed_roles = ['admin', 'founder', 'investor', 'analyst']
+        if v not in allowed_roles:
+            raise ValueError(f'Role must be one of: {", ".join(allowed_roles)}')
+        return v
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResendVerificationLink(BaseModel):
+    token: str
+    

@@ -12,8 +12,7 @@ from utils.ai_client import cost_monitor
 # Add the Backend directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Routers
-from routers import analysis, documents, agent
+from routers import analysis, documents, agent, user_routes
 from models.database import init_firebase
 from utils.ai_client import init_ai_clients
 
@@ -39,6 +38,7 @@ async def startup_event():
 app.include_router(analysis.router, prefix="/analysis", tags=["analysis"])
 app.include_router(documents.router, prefix="/documents", tags=["documents"])
 app.include_router(agent.router, prefix="/agent", tags=["agent"])
+app.include_router(user_routes.router)
 
 @app.get("/")
 async def root():
