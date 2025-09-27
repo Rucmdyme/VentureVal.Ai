@@ -38,7 +38,7 @@ class BenchmarkEngine:
             stage_info = f" for {stage} stage companies" if stage else ""
             
             prompt = f"""
-            You are a senior investment analyst with access to comprehensive market data. Generate realistic and accurate startup benchmark percentiles for the {sector} sector in {geography}{stage_info} based on current 2024-2025 market conditions.
+            You are a senior investment analyst with access to comprehensive market data. Generate realistic and accurate startup benchmark percentiles for the {sector} sector in {geography}{stage_info} based on current market conditions.
 
             SECTOR CONTEXT: {sector}
             GEOGRAPHY: {geography}
@@ -103,12 +103,12 @@ class BenchmarkEngine:
                     "p75": "75th percentile runway in months",
                     "p90": "90th percentile runway in months"
                 }},
-                "valuation_millions": {{
-                    "p10": "10th percentile company valuation in USD",
-                    "p25": "25th percentile company valuation in USD",
-                    "p50": "50th percentile company valuation in USD",
-                    "p75": "75th percentile company valuation in USD", 
-                    "p90": "90th percentile company valuation in USD"
+                "valuation_usd": {{
+                    "p10": "10th percentile company valuation in USD (full value)",
+                    "p25": "25th percentile company valuation in USD (full value)",
+                    "p50": "50th percentile company valuation in USD (full value)",
+                    "p75": "75th percentile company valuation in USD (full value)", 
+                    "p90": "90th percentile company valuation in USD (full value)"
                 }}
             }}
 
@@ -161,7 +161,7 @@ class BenchmarkEngine:
             ('team_size', 'team.size', 'team_sizes'),
             ('burn_rate', 'financials.burn_rate', 'burn_rates_monthly'),
             ('runway', 'financials.runway_months', 'runway_months'),
-            ('valuation', 'financials.valuation', 'valuation_millions'),
+            ('valuation', 'financials.valuation', 'valuation_usd'),
             ('revenue', 'financials.revenue', 'revenue_multiples')
         ]
         
