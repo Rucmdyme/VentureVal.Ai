@@ -19,6 +19,7 @@ class WeightingConfig(BaseModel):
     )
 
 class AnalysisRequest(BaseModel):
+    idtoken: Optional[str] = None
     storage_paths: List[str]
     company_name: Optional[str] = None
     company_url: Optional[str] = None
@@ -31,6 +32,7 @@ class AnalysisResponse(BaseModel):
     progress: Optional[int] = 0
 
 class ChatRequest(BaseModel):
+    idtoken: Optional[str] = None
     analysis_id: str
     question: str
     chat_history: Optional[List[Dict]] = []

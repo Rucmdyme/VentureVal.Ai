@@ -42,7 +42,9 @@ class UserService:
 		except Exception as e:
 			self._handle_firebase_auth_error(e, "user signup")
 		try:
-			self.db.collection(Collections.USERS).document(user_record.uid).set({
+			user_id = user_record.uid
+			self.db.collection(Collections.USERS).document(user_id).set({
+				"user_id": user_id,
                 "email": payload.email,
                 "role": payload.role,
                 "location": payload.location,

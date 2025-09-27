@@ -1,5 +1,5 @@
 # routers/agent.py
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from google import genai
 from google.genai import types
 from typing import List, Dict, Any, Optional
@@ -11,8 +11,10 @@ import re
 from models.schemas import ChatRequest, ChatResponse
 from models.database import get_firestore_client
 from utils.ai_client import monitor_usage, configure_gemini
+from utils.auth_utils import require_user_or_none
+from utils.helpers import match_user_and_analysis_id
 from settings import PROJECT_ID, GCP_REGION
-from utils.enhanced_text_cleaner import sanitize_for_frontend, clean_response_dict, clean_response_text
+from utils.enhanced_text_cleaner import sanitize_for_frontend
 
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -59,45 +61,52 @@ QUESTION_CATEGORIES = {
 }
 
 @router.post("/chat", response_model=ChatResponse)
+@require_user_or_none
 @monitor_usage("gemini_requests")
-async def agent_chat(request: ChatRequest):
+async def agent_chat(request: Request, payload: ChatRequest, user_info=None):
     """Handle agent conversations with comprehensive analysis context"""
     
     analysis_data = None
+    user_id = None
+    if user_info:
+        user_id = user_info["user_id"]
+        analysis_user_details = await match_user_and_analysis_id(user_id, payload.analysis_id)
+        if not analysis_user_details:
+            raise HTTPException(status_code=404, detail="Analysis not found")
     
     try:
         # Enhanced input validation
-        if not request.analysis_id or not request.analysis_id.strip():
+        if not payload.analysis_id or not payload.analysis_id.strip():
             raise HTTPException(status_code=400, detail="Analysis ID is required")
         
-        if not request.question or not request.question.strip():
+        if not payload.question or not payload.question.strip():
             raise HTTPException(status_code=400, detail="Question is required")
         
-        if len(request.question.strip()) > 1000:
+        if len(payload.question.strip()) > 1000:
             raise HTTPException(status_code=400, detail="Question too long (max 1000 characters)")
         
         # Get analysis context asynchronously (single fetch)
-        analysis_data = await get_analysis_data(request.analysis_id.strip())
+        analysis_data = await get_analysis_data(payload.analysis_id.strip())
         
         # Build enhanced context prompt with chat history
-        context_prompt = await build_context_prompt(analysis_data, request.chat_history)
+        context_prompt = await build_context_prompt(analysis_data, payload.chat_history)
         
         # Generate AI response with suggestions in a single API call
         try:
-            ai_result = await generate_ai_response_with_suggestions(context_prompt, request.question.strip(), analysis_data, request.chat_history)
+            ai_result = await generate_ai_response_with_suggestions(context_prompt, payload.question.strip(), analysis_data, payload.chat_history)
             return ChatResponse(
                 response=ai_result['response'],
                 suggested_questions=ai_result['suggested_questions'],
-                analysis_id=request.analysis_id
+                analysis_id=payload.analysis_id
             )
         except Exception as ai_error:
             logger.error(f"AI generation failed: {str(ai_error)}")
             # Return default response when AI fails (using already fetched analysis_data)
-            default_result = generate_default_response(request.question.strip(), analysis_data)
+            default_result = generate_default_response(payload.question.strip(), analysis_data)
             return ChatResponse(
                 response=default_result['response'],
                 suggested_questions=default_result['suggested_questions'],
-                analysis_id=request.analysis_id
+                analysis_id=payload.analysis_id
             )
         
     except HTTPException:
@@ -107,11 +116,11 @@ async def agent_chat(request: ChatRequest):
         # Return default response for any unexpected errors
         if analysis_data:
             # Use already fetched analysis data if available
-            default_result = generate_default_response(request.question.strip(), analysis_data)
+            default_result = generate_default_response(payload.question.strip(), analysis_data)
             return ChatResponse(
                 response=default_result['response'],
                 suggested_questions=default_result['suggested_questions'],
-                analysis_id=request.analysis_id
+                analysis_id=payload.analysis_id
             )
         else:
             # Final fallback if analysis data was never fetched
@@ -123,7 +132,7 @@ async def agent_chat(request: ChatRequest):
                     "How does this opportunity compare to market benchmarks?",
                     "What is the overall investment recommendation?"
                 ],
-                analysis_id=request.analysis_id
+                analysis_id=payload.analysis_id
             )
 
 async def get_analysis_data(analysis_id: str) -> Dict[str, Any]:

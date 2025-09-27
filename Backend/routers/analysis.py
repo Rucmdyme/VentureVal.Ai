@@ -1,7 +1,7 @@
 # Analysis endpoints
 
 # routers/analysis.py
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from datetime import datetime
 import asyncio
 import logging
@@ -10,14 +10,16 @@ import uuid
 
 from models.schemas import AnalysisRequest, AnalysisResponse
 from models.database import get_firestore_client
+from utils.auth_utils import require_user_or_none
 from services.document_processor import DocumentProcessor
 from services.risk_analyzer import RiskAnalyzer
 from services.benchmark_engine import BenchmarkEngine
 from services.deal_generator import DealNoteGenerator
 from services.weighting_calculator import WeightingCalculator
 from utils.ai_client import monitor_usage
-from utils.helpers import update_progress
-from utils.enhanced_text_cleaner import sanitize_for_frontend, clean_response_dict, clean_response_text
+from utils.helpers import update_progress, match_user_and_analysis_id
+from utils.enhanced_text_cleaner import sanitize_for_frontend
+from constants import Collections
 
 logger = logging.getLogger(__name__)
 
@@ -40,27 +42,57 @@ def get_weighting_calculator():
 
 
 @router.post("/start", response_model=AnalysisResponse)
+@require_user_or_none
 @monitor_usage("document_processing")
 async def start_analysis(
-    request: AnalysisRequest, 
+    request: Request, 
+    payload: AnalysisRequest,
     background_tasks: BackgroundTasks,
-    firestore_client=Depends(get_firestore_client)
+    user_info=None,
+    firestore_client=Depends(get_firestore_client),
 ):
     """Start new startup analysis"""
+    user_id = None
+    if user_info:
+        user_id = user_info["user_id"]
     
     try:
-        if not request.storage_paths:
+        if not payload.storage_paths:
             raise HTTPException(status_code=400, detail="At least one storage path is required")
         # Create analysis session
         analysis_id = f"analysis_{uuid.uuid4().hex}"
         
         # Store initial session
+        analysis_user_mapping_doc = {
+            'analysis_id': analysis_id,
+            'user_id': user_id,
+            'company_name': payload.company_name or 'Unknown',
+            'is_active': True,
+            'storage_paths': payload.storage_paths,
+            'created_at': datetime.now(),
+        }
+
+        try:
+            doc_ref = firestore_client.collection(Collections.USER_ANALYSIS_MAPPING).document(analysis_id)
+            await asyncio.get_event_loop().run_in_executor(
+                None, 
+                doc_ref.set,
+                analysis_user_mapping_doc
+            )
+        except Exception as db_error:
+            logger.error(f"Failed to create analysis user mapping: {db_error}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to initialize analysis"
+            )
+
         analysis_doc = {
             'id': analysis_id,
+            'user_id': user_id,
             'status': 'processing',
-            'company_name': request.company_name or 'Unknown',
-            'storage_paths': request.storage_paths,
-            'weighting_config': request.weighting_config.model_dump() if request.weighting_config else None,
+            'company_name': payload.company_name or 'Unknown',
+            'storage_paths': payload.storage_paths,
+            'weighting_config': payload.weighting_config.model_dump() if payload.weighting_config else None,
             'created_at': datetime.now(),
             'progress': 0,
             'progress_message': 'Analysis initiated',
@@ -82,7 +114,7 @@ async def start_analysis(
             )
 
         # Start background processing
-        background_tasks.add_task(process_analysis_safe, analysis_id, request)
+        background_tasks.add_task(process_analysis_safe, analysis_id, payload)
         
         return AnalysisResponse(
             analysis_id=analysis_id,
@@ -243,8 +275,13 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
 
 
 @router.get("/{analysis_id}")
-async def get_analysis(analysis_id: str):
+@require_user_or_none
+async def get_analysis(request: Request, analysis_id: str, idtoken: str = None, user_info=None):
     """Get analysis results"""
+    if user_info:
+        analysis_user_details = await match_user_and_analysis_id(user_info["user_id"], analysis_id)
+        if not analysis_user_details:
+            raise HTTPException(status_code=404, detail="Analysis not found")
     
     try:
         # Use async executor for Firestore operation
