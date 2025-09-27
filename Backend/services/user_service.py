@@ -8,9 +8,8 @@ import logging
 from models import schemas
 from models.database import get_firestore_client
 from constants import Collections, FirebaseAccessUrl, SendMailRequestTypes, RedirectUrl
-# from settings import API_KEY
+from settings import API_KEY
 logger = logging.getLogger(__name__)
-API_KEY="testig now"
 
 
 class UserService:
