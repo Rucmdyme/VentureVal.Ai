@@ -132,7 +132,6 @@ async def process_analysis_safe(analysis_id: str, request: AnalysisRequest):
         logger.error(f"Critical error in background analysis {analysis_id}: {e}")
         # Ensure error state is recorded even if process_analysis fails completely
         try:
-            firestore_client = get_firestore_client()
             error_update = {
                 'status': 'failed',
                 'error': f"Critical processing error: {str(e)}",
@@ -156,7 +155,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
     
     try:
         # Step 1: Document Processing
-        await update_progress(analysis_id, 21, "Processing documents...")
+        await update_progress(analysis_id, 30, "Processing documents...")
         
         try:
             processed_data = await doc_processor.process_documents_from_storage(request.storage_paths)
@@ -173,7 +172,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         if not processed_data or 'synthesized_data' not in processed_data:
             raise ValueError("Document processing failed - no synthesized data extracted")
             
-        await update_progress(analysis_id, 40, "Documents processed. Analyzing risk and benchmarking...", processed_data=processed_data)
+        await update_progress(analysis_id, 55, "Documents processed. Analyzing risk and benchmarking...", processed_data=processed_data)
         
         synthesized_data = processed_data['synthesized_data']
 
@@ -200,10 +199,8 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
             )
         except Exception as e:
             raise ValueError(f"Score calculation failed: {str(e)}")
-            
-        await update_progress(analysis_id, 90, "Scoring complete")
-        
-        await update_progress(analysis_id, 95, "Generating deal note...")
+                    
+        await update_progress(analysis_id, 90, "Generating deal note...")
         try:
             deal_note = await deal_generator.generate_deal_note(
                 analysis_id,
