@@ -17,7 +17,7 @@ from services.benchmark_engine import BenchmarkEngine
 from services.deal_generator import DealNoteGenerator
 from services.weighting_calculator import WeightingCalculator
 from utils.ai_client import monitor_usage
-from utils.helpers import update_progress, match_user_and_analysis_id
+from utils.helpers import update_progress, match_user_and_analysis_id, db_insert, db_update, db_get, asyncio_gather_dict
 from utils.enhanced_text_cleaner import sanitize_for_frontend
 from constants import Collections
 
@@ -100,12 +100,7 @@ async def start_analysis(
         }
 
         try:
-            doc_ref = firestore_client.collection('analyses').document(analysis_id)
-            await asyncio.get_event_loop().run_in_executor(
-                None, 
-                doc_ref.set,
-                analysis_doc
-            )
+            await db_insert(analysis_id, Collections.ANALYSIS, analysis_doc)
         except Exception as db_error:
             logger.error(f"Failed to create analysis record: {db_error}")
             raise HTTPException(
@@ -144,10 +139,7 @@ async def process_analysis_safe(analysis_id: str, request: AnalysisRequest):
                 'failed_at': datetime.now(),
                 'progress_message': f'Analysis failed: {str(e)}'
             }
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: firestore_client.collection('analyses').document(analysis_id).update(error_update)
-            )
+            await db_update(analysis_id, Collections.ANALYSIS, error_update)
         except Exception as update_error:
             logger.critical(f"Failed to record critical error for {analysis_id}: {update_error}")
 
@@ -181,33 +173,21 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         if not processed_data or 'synthesized_data' not in processed_data:
             raise ValueError("Document processing failed - no synthesized data extracted")
             
-        await update_progress(analysis_id, 30, "Documents processed", processed_data=processed_data)
+        await update_progress(analysis_id, 40, "Documents processed. Analyzing risk and benchmarking...", processed_data=processed_data)
         
         synthesized_data = processed_data['synthesized_data']
-        
-        # Step 2: Risk Analysis
-        await update_progress(analysis_id, 40, "Analyzing risks...")
-        try:
-            risk_results = await risk_analyzer.analyze_risks(synthesized_data)
-        except Exception as e:
-            raise ValueError(f"Risk analysis failed: {str(e)}")
-            
-        await update_progress(analysis_id, 55, "Risk assessment complete", risk_assessment = risk_results)
-        
-        # Step 3: Benchmarking
-        await update_progress(analysis_id, 60, "Running benchmarks...")
+
+        # Running parallel tasks for risk analysis and benchmarking
         sector = synthesized_data.get('sector', 'unknown')
-        try:
-            benchmark_results = await benchmark_engine.calculate_percentiles(
-                synthesized_data, 
-                sector
-            )
-        except Exception as e:
-            raise ValueError(f"Benchmarking failed: {str(e)}")
-            
-        await update_progress(analysis_id, 75, "Benchmarking complete", benchmarking=benchmark_results)
+        tasks = [
+            risk_analyzer.analyze_risks(analysis_id, synthesized_data), 
+            benchmark_engine.calculate_percentiles(analysis_id, synthesized_data, sector)
+        ]
+        risk_results, benchmark_results = await asyncio.gather(*tasks, return_exceptions=True)
+        for task_result in [risk_results, benchmark_results]:
+            if isinstance(task_result, Exception):
+                raise ValueError(f"Analysis failed: {task_result}")
         
-        # Step 4: Weighted Scoring
         await update_progress(analysis_id, 80, "Calculating scores...")
         weighting_config = request.weighting_config.model_dump() if request.weighting_config else {}
         try:
@@ -221,12 +201,12 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         except Exception as e:
             raise ValueError(f"Score calculation failed: {str(e)}")
             
-        await update_progress(analysis_id, 90, "Scoring complete", weighted_scores=weighted_scores)
+        await update_progress(analysis_id, 90, "Scoring complete")
         
-        # Step 5: Deal Note Generation
         await update_progress(analysis_id, 95, "Generating deal note...")
         try:
             deal_note = await deal_generator.generate_deal_note(
+                analysis_id,
                 synthesized_data,
                 risk_results,
                 benchmark_results,
@@ -239,19 +219,12 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         # Store final results
         final_results = {
             'status': 'completed',
-            'deal_note': deal_note,
             'completed_at': datetime.now(),
             'progress': 100,
             'message': 'Analysis completed successfully',
             'error': None
         }
-        
-        firestore_client = get_firestore_client()
-        await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: firestore_client.collection('analyses').document(analysis_id).update(final_results)
-        )
-        
+        await db_update(analysis_id, Collections.ANALYSIS, final_results)
         logger.info(f"Analysis {analysis_id} completed successfully")
         
     except Exception as e:
@@ -265,13 +238,37 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         }
         
         try:
-            firestore_client = get_firestore_client()
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: firestore_client.collection('analyses').document(analysis_id).update(error_update)
-            )
+            await db_update(analysis_id, Collections.ANALYSIS, error_update)
         except Exception as update_error:
             logger.critical(f"Failed to update error status for {analysis_id}: {update_error}")
+
+async def fetch_analysis_data(analysis_id: str)-> dict:
+    data = await db_get(Collections.ANALYSIS, analysis_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    try:
+        # Use async executor for Firestore 
+        collection_key_mapping = {
+            Collections.BENCHMARK_ANALYSIS: "benchmarking",
+            Collections.RISK_ANALYSIS: "risk_assessment",
+            Collections.DEAL_NOTE: "deal_note",
+            Collections.WEIGHTED_SCORES: "weighted_scores"
+        }
+        map_name_tasks = {}
+        for collection_name, key_name in collection_key_mapping.items():
+            map_name_tasks[key_name] = db_get(collection_name, analysis_id)
+        map_name_values = await asyncio_gather_dict(map_name_tasks)
+        for map_name_key, result in map_name_values.items():
+            data[map_name_key] = result
+
+        data = serialize_datetime_fields(data)
+        return sanitize_for_frontend(data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retrieve analysis {analysis_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve analysis: {str(e)}")
 
 
 @router.get("/{analysis_id}")
@@ -282,30 +279,9 @@ async def get_analysis(request: Request, analysis_id: str, idtoken: str = None, 
         analysis_user_details = await match_user_and_analysis_id(user_info["user_id"], analysis_id)
         if not analysis_user_details:
             raise HTTPException(status_code=404, detail="Analysis not found")
+    return await fetch_analysis_data(analysis_id)
     
-    try:
-        # Use async executor for Firestore operation
-        firestore_client = get_firestore_client()
-        doc = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: firestore_client.collection('analyses').document(analysis_id).get()
-        )
-        
-        if not doc.exists:
-            raise HTTPException(status_code=404, detail="Analysis not found")
-        
-        data = doc.to_dict()
-        
-        data = serialize_datetime_fields(data)
-        
-        return sanitize_for_frontend(data)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to retrieve analysis {analysis_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve analysis: {str(e)}")
-
+    
 @router.post("/{analysis_id}/reweight")
 async def update_weighting(
     analysis_id: str, 
@@ -328,7 +304,7 @@ async def update_weighting(
     try:
         doc = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: firestore_client.collection('analyses').document(analysis_id).get()
+            lambda: firestore_client.collection(Collections.ANALYSIS).document(analysis_id).get()
         )
         
         if not doc.exists:
@@ -382,12 +358,7 @@ async def update_weighting(
             'weighting_config': weighting_config,
             'updated_at': datetime.now()
         }
-        
-        await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: firestore_client.collection('analyses').document(analysis_id).update(update_data)
-        )
-        
+        await db_update(analysis_id, Collections.ANALYSIS, update_data)
         logger.info(f"Weighting updated successfully for {analysis_id}")
         
         return {

@@ -8,6 +8,8 @@ from utils.ai_client import configure_gemini
 import logging
 from settings import PROJECT_ID, GCP_REGION
 from utils.enhanced_text_cleaner import sanitize_for_frontend
+from utils.helpers import db_insert
+from constants import Collections
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +145,7 @@ class BenchmarkEngine:
             logger.error(f"Error getting benchmarks from Gemini: {e}")
             return self.get_default_benchmarks()
     
-    async def calculate_percentiles(self, startup_data: Dict, sector: str) -> Dict:
+    async def calculate_percentiles(self, analysis_id: str, startup_data: Dict, sector: str) -> Dict:
         """Calculate startup's percentile rankings - main method called by process_analysis"""
         
         # Extract stage and geography from startup data
@@ -183,8 +185,7 @@ class BenchmarkEngine:
         
         # Generate insights if Gemini is available
         insights = await self._generate_insights(startup_data, percentiles, sector) if self.gemini_available else []
-        
-        return {
+        analysis_data = {
             'percentiles': percentiles,
             'overall_score': overall_score,
             'sector_benchmarks': benchmarks,
@@ -192,6 +193,9 @@ class BenchmarkEngine:
             'analysis_date': datetime.now().isoformat(),
             'data_source': 'gemini_ai' if self.gemini_available else 'static_fallback'
         }
+        await db_insert(analysis_id, Collections.BENCHMARK_ANALYSIS, analysis_data)
+        
+        return analysis_data
     
     def calculate_single_percentile(self, value: float, benchmark_distribution: Dict, metric_name: str) -> Dict:
         """Calculate percentile for a single metric"""

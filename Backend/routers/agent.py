@@ -3,11 +3,11 @@ from fastapi import APIRouter, HTTPException, Request
 from google import genai
 from google.genai import types
 from typing import List, Dict, Any, Optional
-import json
 import logging
 import asyncio
-import re
 
+from constants import Collections
+from routers.analysis import fetch_analysis_data
 from models.schemas import ChatRequest, ChatResponse
 from models.database import get_firestore_client
 from utils.ai_client import monitor_usage, configure_gemini
@@ -139,18 +139,7 @@ async def get_analysis_data(analysis_id: str) -> Dict[str, Any]:
     """Retrieve and validate analysis data"""
     
     try:
-        firestore_client = get_firestore_client()
-        
-        # Use async executor for Firestore operation
-        analysis_doc = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: firestore_client.collection('analyses').document(analysis_id).get()
-        )
-        
-        if not analysis_doc.exists:
-            raise HTTPException(status_code=404, detail="Analysis not found")
-        
-        analysis_data = analysis_doc.to_dict()
+        analysis_data = await fetch_analysis_data(analysis_id)
         if not analysis_data:
             raise HTTPException(status_code=404, detail="Analysis data is empty")
             

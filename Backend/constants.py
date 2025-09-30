@@ -1,7 +1,12 @@
 class Collections:
     USERS = "users"
-    ANALYSIS_DATA = "analysis"
+    ANALYSIS = "analysis"
     USER_ANALYSIS_MAPPING = "user_analysis_mapping"
+    RISK_ANALYSIS = "risk_analysis"
+    BENCHMARK_ANALYSIS = "benchmark_analysis"
+    DEAL_NOTE = "deal_note"
+    WEIGHTED_SCORES = "weighted_scores"
+
 
 class FirebaseAccessUrl:
     SIGN_IN_WITH_PASSWORD = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
