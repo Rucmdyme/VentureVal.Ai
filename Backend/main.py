@@ -2,12 +2,14 @@
 
 # main.py - FastAPI Application
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import uvicorn
 import sys
 import os
 from utils.ai_client import cost_monitor
+from exceptions import HandledException
 
 # Add the Backend directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -26,6 +28,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+async def _custom_error_handler(request, exc):
+    return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "message": exc.message,
+                "success": False
+            },
+        )
+
+for SubClass in HandledException.__subclasses__():
+    app.add_exception_handler(
+        SubClass, 
+        _custom_error_handler
+    )
+
 
 # Initialize services
 @app.on_event("startup")
