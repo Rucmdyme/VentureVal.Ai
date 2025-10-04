@@ -2,17 +2,17 @@
 from google import genai
 from google.genai import types
 
-import json
 import logging
 from typing import Dict, Optional, Any, List
 from datetime import datetime
-import os
 from dataclasses import dataclass
 import asyncio
 from functools import wraps
 from utils.ai_client import configure_gemini
 from settings import PROJECT_ID, GCP_REGION
 from utils.enhanced_text_cleaner import sanitize_for_frontend
+from constants import Collections
+from utils.helpers import db_insert
 
 logger = logging.getLogger(__name__)
 
@@ -80,35 +80,38 @@ class DealNoteGenerator:
     @async_timeout(60)
     async def generate_deal_note(
         self, 
+        analysis_id: str,
         startup_data: Dict[str, Any], 
         risk_assessment: Dict[str, Any], 
         benchmark_results: Dict[str, Any], 
         weighted_scores: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Generate comprehensive deal note with robust error handling"""
+        data = {}
         
         # Validate inputs
         if not self._validate_inputs(startup_data, risk_assessment, benchmark_results, weighted_scores):
-            return self._create_error_response("Invalid input data provided")
+            data = self._create_error_response("Invalid input data provided")
         
         # Check if AI model is available
-        if not self._model:
+        elif not self._model:
             logger.warning("AI model not available, generating fallback summary")
-            return self._create_fallback_response(startup_data, weighted_scores, "AI model not initialized")
-        
-        try:
-            # Generate the deal note with retries
-            content = await self._generate_with_retries(
-                startup_data, risk_assessment, benchmark_results, weighted_scores
-            )
-
-            return self._create_success_response(
-                startup_data, weighted_scores, risk_assessment, content, benchmark_results
-            )
-            
-        except Exception as e:
-            logger.error(f"Deal note generation failed: {e}")
-            return self._create_fallback_response(startup_data, weighted_scores, str(e))
+            data = self._create_fallback_response(startup_data, weighted_scores, "AI model not initialized")
+        else:
+            try:
+                # Generate the deal note with retries
+                content = await self._generate_with_retries(
+                    startup_data, risk_assessment, benchmark_results, weighted_scores
+                )
+                data = self._create_success_response(
+                    startup_data, weighted_scores, risk_assessment, content, benchmark_results
+                )
+                
+            except Exception as e:
+                logger.error(f"Deal note generation failed: {e}")
+                data = self._create_fallback_response(startup_data, weighted_scores, str(e))
+        await db_insert(analysis_id, Collections.DEAL_NOTE, data)
+        return data
     
 
     def _calculate_years_in_operation(self, founded_value: Any) -> Optional[int]:
