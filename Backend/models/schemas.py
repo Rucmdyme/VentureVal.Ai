@@ -1,7 +1,7 @@
 
 # models/schemas.py
-from pydantic import BaseModel, Field, EmailStr, validator
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, EmailStr, validator, root_validator
+from typing import List, Optional, Dict, Any, Literal, Union
 from enum import Enum
 import re
 
@@ -54,11 +54,51 @@ class DocumentUploadRequest(BaseModel):
     file_type: FileType = Field(..., description="Type of document being uploaded")
 
 # User schemas for user management
+
+ALLOWED_STAGES = Literal["Idea", "MVP", "Revenue", "Scaling", "Seed", "Series A", "Series B"]
+
+class EntrepreneurDetails(BaseModel):
+    """Model for fields specific to the 'Entrepreneur' role."""
+    role: Literal["Entrepreneur"] = "Entrepreneur"
+    startup_name: Optional[str] = Field(..., description="Startup Name")
+    stage: Optional[ALLOWED_STAGES] = Field(..., description="Current stage of the startup")
+    sector: Optional[str] = Field(..., description="e.g., FinTech, HealthTech, AI/ML")
+
+
+class InvestorDetails(BaseModel):
+    """Model for fields specific to the 'Investor' role."""
+    role: Literal["Investor"] = "Investor"
+    investment_stages: Optional[List[ALLOWED_STAGES]] = Field(..., description="Investment Stage Preference")    
+    sectors_of_interest: Optional[List[str]] = Field(..., description="e.g., FinTech, HealthTech, AI/ML")
+
+
+class AdvisorDetails(BaseModel):
+    """Model for fields specific to the 'Advisor' role."""
+    role: Literal["Advisor"] = "Advisor"
+    organization: Optional[str] = Field(..., description="Organization")
+    profile: Optional[str] = Field(..., description="Role title within the organization")
+    focus_area: Optional[List[str]] = Field(..., description="e.g., Due diligence, Management, Deal Sourcing")
+
+
+RoleSpecificDetails = Union[EntrepreneurDetails, InvestorDetails, AdvisorDetails]
+
 class SignupRequest(BaseModel):
+    full_name: str
     email: EmailStr
     password: str
-    role: str
     location: Optional[str] = None
+    role_details: Optional[RoleSpecificDetails] = Field(
+        None,
+        description="Role-specific details required for certain user types.",
+        discriminator='role'
+    )
+    @root_validator(pre=True)
+    def handle_empty_role_details(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        role_details = values.get('role_details')
+        if not role_details:
+            values['role_details'] = None
+        return values
+
     # @validator('password')
     # def validate_password(cls, v):
     #     if len(v) < 8:
@@ -70,13 +110,6 @@ class SignupRequest(BaseModel):
     #     if not re.search(r'\d', v):
     #         raise ValueError('Password must contain at least one digit')
     #     return v
-    @validator('role')
-    def validate_role(cls, v):
-        allowed_roles = ["Admin", "Investor", "Entrepreneur", "Advisor"]
-        if v not in allowed_roles:
-            raise ValueError(f'Role must be one of: {", ".join(allowed_roles)}')
-        return v
-
 
 class LoginRequest(BaseModel):
     email: EmailStr

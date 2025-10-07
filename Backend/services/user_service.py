@@ -44,13 +44,16 @@ class UserService:
 			self._handle_firebase_auth_error(e, "user signup")
 		try:
 			user_id = user_record.uid
-			self.db.collection(Collections.USERS).document(user_id).set({
+			insert_data = {
 				"user_id": user_id,
                 "email": payload.email,
-                "role": payload.role,
+				"full_name": payload.full_name,
                 "location": payload.location,
                 "created_at": firestore.SERVER_TIMESTAMP
-            })
+            }
+			if payload.role_details:
+				insert_data["role_details"] = dict(payload.role_details)
+			self.db.collection(Collections.USERS).document(user_id).set(insert_data)
 			logger.info(f"User created successfully: {user_record.uid}")
 		except Exception as error:
 			# Rollback: Delete the Firebase user if Firestore creation fails
