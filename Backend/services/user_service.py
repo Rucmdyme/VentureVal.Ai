@@ -61,7 +61,7 @@ class UserService:
 			auth.delete_user(user_record.uid)
 			logger.warning(f"Rolled back Firebase user creation for: {payload.email}")
 			raise ServerException(status_code=500, message="Failed to create user profile")
-		return {"message": "Signup successful, Please verify your email", "success": True}
+		return {"message": "Signup successful.", "success": True}
 	
 
 	def login(self, payload: schemas.LoginRequest):
