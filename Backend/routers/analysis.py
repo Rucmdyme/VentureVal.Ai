@@ -20,7 +20,7 @@ from utils.ai_client import monitor_usage
 from utils.helpers import update_progress, match_user_and_analysis_id, db_insert, db_update, db_get, asyncio_gather_dict
 from utils.enhanced_text_cleaner import sanitize_for_frontend
 from constants import Collections
-from exceptions import UnAuthorizedException, ServerException
+from exceptions import UnAuthorizedException, ServerException, NotFoundException
 
 logger = logging.getLogger(__name__)
 
@@ -390,7 +390,7 @@ def serialize_datetime_fields(data: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.post("/bulk-details")
 @require_user_or_none
-async def get_bulk_analysis(request: Request, idtoken: str = None, user_info=None):
+async def _get_bulk_analysis(request: Request, idtoken: str = None, user_info=None):
     if not user_info or not user_info.get("user_id"):
         raise UnAuthorizedException
     user_id = user_info["user_id"]
@@ -403,3 +403,24 @@ async def get_bulk_analysis(request: Request, idtoken: str = None, user_info=Non
         "data": data,
         "message": "success"
     }
+
+@router.delete("/delete/{analysis_id}")
+@require_user_or_none
+async def _delete_analysis(request: Request, analysis_id: str, idtoken: str = None, user_info=None):
+    if not user_info or not user_info.get("user_id"):
+        raise UnAuthorizedException
+    user_id = user_info["user_id"]
+    try:
+        data = await match_user_and_analysis_id(user_id)
+    except Exception as error:
+        logger.error(f"Error occured while fetching analysis data: {error}")
+        raise ServerException
+    if not data:
+        raise NotFoundException("Requested analysis does not exist")
+    try:
+        await db_update(analysis_id, Collections.USER_ANALYSIS_MAPPING, {"is_active": False})
+    except Exception as error:
+        logger.error(f"Exception while deleting analysis: {analysis_id}: error: {error}")
+        raise ServerException
+    return {"data": "Analysis deleted successfully.", "message": True}
+
