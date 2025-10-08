@@ -60,24 +60,24 @@ ALLOWED_STAGES = Literal["Idea", "MVP", "Revenue", "Scaling", "Seed", "Series A"
 class EntrepreneurDetails(BaseModel):
     """Model for fields specific to the 'Entrepreneur' role."""
     role: Literal["Entrepreneur"] = "Entrepreneur"
-    startup_name: Optional[str] = Field(..., description="Startup Name")
-    stage: Optional[ALLOWED_STAGES] = Field(..., description="Current stage of the startup")
-    sector: Optional[str] = Field(..., description="e.g., FinTech, HealthTech, AI/ML")
+    startup_name: Optional[str] = Field(None, description="Startup Name")
+    stage: Optional[ALLOWED_STAGES] = Field(None, description="Current stage of the startup")
+    sector: Optional[str] = Field(None, description="e.g., FinTech, HealthTech, AI/ML")
 
 
 class InvestorDetails(BaseModel):
     """Model for fields specific to the 'Investor' role."""
     role: Literal["Investor"] = "Investor"
-    investment_stages: Optional[List[ALLOWED_STAGES]] = Field(..., description="Investment Stage Preference")    
-    sectors_of_interest: Optional[List[str]] = Field(..., description="e.g., FinTech, HealthTech, AI/ML")
+    investment_stages: Optional[List[ALLOWED_STAGES]] = Field(None, description="Investment Stage Preference")    
+    sectors_of_interest: Optional[List[str]] = Field(None, description="e.g., FinTech, HealthTech, AI/ML")
 
 
 class AdvisorDetails(BaseModel):
     """Model for fields specific to the 'Advisor' role."""
     role: Literal["Advisor"] = "Advisor"
-    organization: Optional[str] = Field(..., description="Organization")
-    profile: Optional[str] = Field(..., description="Role title within the organization")
-    focus_area: Optional[List[str]] = Field(..., description="e.g., Due diligence, Management, Deal Sourcing")
+    organization: Optional[str] = Field(None, description="Organization")
+    profile: Optional[str] = Field(None, description="Role title within the organization")
+    focus_area: Optional[List[str]] = Field(None, description="e.g., Due diligence, Management, Deal Sourcing")
 
 
 RoleSpecificDetails = Union[EntrepreneurDetails, InvestorDetails, AdvisorDetails]
