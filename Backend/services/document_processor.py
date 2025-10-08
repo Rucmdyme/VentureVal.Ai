@@ -1,13 +1,17 @@
 # services/document_processor.py
 import asyncio
+import time
+import uuid
 import aiohttp
 import os
 from typing import List, Dict, Any
 from google import genai
-from firebase_admin import storage
+from firebase_admin import storage, firestore
+
 import json
 import logging
 from datetime import timedelta
+from pathlib import Path
 from io import BytesIO
 from utils.ai_client import configure_gemini
 from models.database import get_storage_bucket
@@ -15,6 +19,10 @@ import re
 from urllib.parse import urlparse
 from settings import PROJECT_ID, GCP_REGION
 from utils.enhanced_text_cleaner import sanitize_for_frontend
+from utils.helpers import db_insert
+from models.database import get_firestore_client
+from constants import Collections, ALLOWED_EXTENSIONS
+from exceptions import NotFoundException, ServerException, InvalidParametersException
 
 logger = logging.getLogger(__name__)
 
@@ -294,3 +302,109 @@ class DocumentProcessor:
         """Extract file extension from URL"""
         path = urlparse(file_url).path
         return os.path.splitext(path.lower())[-1]
+
+class DocumentService:
+    def __init__(self, db=None):
+        self.db = db or get_firestore_client()
+        self.bucket = get_storage_bucket()
+
+    async def fetch_document_details(self, document_ids, user_id):
+        query = self.db.collection(Collections.DOCUMENTS).where(
+            "document_id", "in", document_ids
+        )
+        if user_id:
+            query = query.where(
+                "user_id", "==", user_id
+            )
+        query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
+        try:
+            results = query.stream()
+            
+            # 5. Process and Return Data
+            mappings = []
+            for doc in results:
+                data = doc.to_dict()
+                data['id'] = doc.id # Include the document ID for reference
+                mappings.append(data)
+                
+            logger.info(f"Retrieved {len(mappings)} documents for user {user_id} and documents_ids: {document_ids}")
+            return mappings
+        except Exception as error:
+            logger.error(f"Error fetching document_details: {document_ids}: {error}")
+            raise ServerException
+
+
+    async def generate_download_urls(self, document_id: str, user_id) -> Dict[str, str]:
+        """Convert storage paths to download URLs"""
+        document_details = await self.fetch_document_details([document_id], user_id)
+        if not document_details:
+            raise NotFoundException(message="File does not exist")
+        document_details = document_details[0]
+        storage_path = document_details["storage_path"]
+
+        try:
+            blob = self.bucket.blob(storage_path)
+
+            # Check if file exists
+            if not blob.exists():
+                logger.warning(f"File not found: {storage_path}")
+
+            # Generate download URL (30 minutes expiry)
+            download_url = blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(minutes=30),
+                method="GET"
+            )
+
+            document_details["download_url"] = download_url
+
+        except Exception as e:
+            logger.error(f"Failed to generate download URL for {storage_path}: {e}")
+        return document_details
+    
+
+    async def generate_presigned_url(self, payload, user_id):
+        try:
+            # Step 1: Validate the file metadata from the payload
+            file_extension = Path(payload.filename).suffix.lower()
+            
+            # Validate file extension
+            if file_extension not in ALLOWED_EXTENSIONS:
+                raise InvalidParametersException(message=f"Invalid file extension: {file_extension}. Supported extensions: .pdf, .txt, .jpg, .jpeg, .png")
+
+            # Step 2: Generate a unique path in Firebase Storage
+            document_id = str(uuid.uuid4())
+            timestamp = int(time.time())
+            filename_without_ext = Path(payload.filename).stem
+            storage_path = f"documents/{payload.file_type.value}/{timestamp}_{filename_without_ext}_{document_id}{file_extension}"
+            data_to_insert = {
+                "document_id": document_id,
+                "storage_path": storage_path,
+                "file_name": payload.filename,
+                "user_id": user_id
+            }
+            await db_insert(document_id, Collections.DOCUMENTS, data_to_insert)
+            
+            # Step 3: Generate the V4 Signed URL
+            bucket = get_storage_bucket()
+            blob = bucket.blob(storage_path)
+
+            # The frontend MUST use a PUT payload with the exact content_type specified here.
+            signed_url = blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(minutes=15),
+                method="PUT",
+            )
+
+            return {
+                "success": True,
+                "signed_url": signed_url,
+                "storage_path": storage_path,
+                "document_id": document_id,
+                "file_type": payload.file_type.value,
+                "message": "Upload URL generated successfully. Use PUT to upload the file."
+            }
+        except Exception as error:
+            logger.error(f"Exception while generating presigned url: {error}")
+            raise ServerException
+

@@ -50,6 +50,7 @@ class FileType(str, Enum):
     EMAIL_COMMUNICATION = "email_communication"
 
 class DocumentUploadRequest(BaseModel):
+    idtoken: Optional[str] = None
     filename: str
     file_type: FileType = Field(..., description="Type of document being uploaded")
 
