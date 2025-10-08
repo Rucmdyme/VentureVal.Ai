@@ -66,7 +66,6 @@ async def start_analysis(
         analysis_user_mapping_doc = {
             'analysis_id': analysis_id,
             'user_id': user_id,
-            'company_name': payload.company_name or 'Unknown',
             'is_active': True,
             'storage_paths': payload.storage_paths,
             'created_at': datetime.now(),

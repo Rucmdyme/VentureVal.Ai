@@ -12,7 +12,7 @@ from utils.ai_client import configure_gemini
 from settings import PROJECT_ID, GCP_REGION
 from utils.enhanced_text_cleaner import sanitize_for_frontend
 from constants import Collections
-from utils.helpers import db_insert
+from utils.helpers import db_insert, db_update
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +76,21 @@ class DealNoteGenerator:
         except Exception as e:
             logger.error(f"Failed to initialize Google Generative AI: {e}")
             self._model = None
+
+    async def update_user_analysis_mapping_details(self, analysis_id, startup_data):
+        company_name = startup_data.get("company_name")
+        summary_stats =  startup_data.get("summary_stats") or {}
+        data_to_update = {
+            "company_name": company_name,
+            "sector": summary_stats.get("sector"),
+            "stage": summary_stats.get("stage"),
+            "geography": summary_stats.get("geography")
+        }
+        try:
+            await db_update(analysis_id, Collections.USER_ANALYSIS_MAPPING, data_to_update)
+        except Exception as error:
+            logger.error(f"Error while updating analysis mapping details: {error}")
+
     
     @async_timeout(60)
     async def generate_deal_note(
@@ -106,6 +121,7 @@ class DealNoteGenerator:
                 data = self._create_success_response(
                     startup_data, weighted_scores, risk_assessment, content, benchmark_results
                 )
+                await self.update_user_analysis_mapping_details(analysis_id, data)
                 
             except Exception as e:
                 logger.error(f"Deal note generation failed: {e}")
