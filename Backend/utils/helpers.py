@@ -26,7 +26,7 @@ async def update_progress(analysis_id: str, progress: int = None, message: str =
         print(f"Failed to update progress for {analysis_id}: {e}")
 
 
-async def match_user_and_analysis_id(user_id: str, analysis_id: str, include_inactive: bool = False):
+async def match_user_and_analysis_id(user_id: str, analysis_id: str = None, include_inactive: bool = False):
     db=get_firestore_client()
 
     query = db.collection(Collections.USER_ANALYSIS_MAPPING).where(
