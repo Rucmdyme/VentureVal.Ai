@@ -10,20 +10,20 @@ router = APIRouter(prefix="/user", tags=["user"])
 
 @router.post("/signup")
 async def signup(request: schemas.SignupRequest):
-	return user_service.signup(request)
+	return await user_service.signup(request)
 
 @router.post("/login")
 async def login(request: schemas.LoginRequest):
-	return user_service.login(request)
+	return await user_service.login(request)
 
 @router.get("/user-info")
 async def get_user_info(token: str, response: Response):
-	return user_service.get_current_user(token)
+	return await user_service.get_current_user(token)
 
 @router.post("/reset-password")
 async def reset_password(request: schemas.ResetPasswordRequest):
-	return user_service.reset_password(request)
+	return await user_service.reset_password(request)
 
 @router.post("/verify-email")
 async def resend_verification(request: schemas.ResendVerificationLink):
-	return user_service.resend_verification(request)
+	return await user_service.resend_verification(request)

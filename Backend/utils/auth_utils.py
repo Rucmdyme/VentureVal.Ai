@@ -31,7 +31,7 @@ async def get_user_details(request: Request) -> Optional[dict]:
     if not idtoken:
         return None
     try:
-        return user_service.get_current_user(idtoken)
+        return await user_service.get_current_user(idtoken)
     except HTTPException as e:
         raise
     except Exception as e:

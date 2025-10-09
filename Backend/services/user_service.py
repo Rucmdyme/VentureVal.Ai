@@ -3,6 +3,7 @@ from firebase_admin import auth
 from models.database import firestore
 import requests
 import logging
+import asyncio
 
 from models import schemas
 from models.database import get_firestore_client
@@ -32,9 +33,10 @@ class UserService:
 			raise ServerException
 
 
-	def signup(self, payload: schemas.SignupRequest):
+	async def signup(self, payload: schemas.SignupRequest):
 		try:
-			user_record = auth.create_user(
+			user_record = await asyncio.to_thread(
+				auth.create_user,
 				email=payload.email,
 				password=payload.password,
 				email_verified=False,
@@ -52,18 +54,21 @@ class UserService:
             }
 			if payload.role_details:
 				insert_data["role_details"] = dict(payload.role_details)
-			self.db.collection(Collections.USERS).document(user_id).set(insert_data)
+			await asyncio.to_thread(
+				self.db.collection(Collections.USERS).document(user_id).set,
+				insert_data
+			)
 			logger.info(f"User created successfully: {user_record.uid}")
 		except Exception as error:
 			# Rollback: Delete the Firebase user if Firestore creation fails
 			logger.error(f"Failed to create user profile: {str(error)}")
-			auth.delete_user(user_record.uid)
+			await asyncio.to_thread(auth.delete_user, user_record.uid)
 			logger.warning(f"Rolled back Firebase user creation for: {payload.email}")
 			raise ServerException(status_code=500, message="Failed to create user profile")
 		return {"message": "Signup successful.", "success": True}
 	
 
-	def login(self, payload: schemas.LoginRequest):
+	async def login(self, payload: schemas.LoginRequest):
 
 		params = {"key": self.api_key}
 		json_payload = {
@@ -72,7 +77,12 @@ class UserService:
 			"returnSecureToken": True
 		}
 		try:
-			resp = requests.post(FirebaseAccessUrl.SIGN_IN_WITH_PASSWORD, params=params, json=json_payload)
+			resp = await asyncio.to_thread(
+				requests.post, 
+				FirebaseAccessUrl.SIGN_IN_WITH_PASSWORD, 
+				params=params, 
+				json=json_payload
+			)
 		except Exception as e:
 			logger.error(f"Network error during login: {str(e)}")
 			self._handle_firebase_auth_error(e, "login")
@@ -83,7 +93,7 @@ class UserService:
 		user_auth_token = login_info["idToken"]
 		
 		try:
-			decoded_token = auth.verify_id_token(user_auth_token)
+			decoded_token = await asyncio.to_thread(auth.verify_id_token, user_auth_token)
 			email_verified = decoded_token.get('email_verified')
 			user_id = decoded_token.get('user_id')
 			# TODO: check for allowing user to login only when verified.
@@ -92,7 +102,9 @@ class UserService:
             #         status_code=403,
             #         detail="Please verify your email before logging in"
             #     )
-			user_doc = self.db.collection(Collections.USERS).document(user_id).get()
+			user_doc = await asyncio.to_thread(
+				self.db.collection(Collections.USERS).document(user_id).get
+			)
 			if not user_doc.exists:
 				raise InvalidCredentialsException(message="User profile missing")
 			user_data = user_doc.to_dict()
@@ -101,15 +113,17 @@ class UserService:
 			self._handle_firebase_auth_error(e, "user login")
 
 
-	def get_current_user(self, token: str):
+	async def get_current_user(self, token: str):
 		try:
-			decoded_token = auth.verify_id_token(token)
+			decoded_token = await asyncio.to_thread(auth.verify_id_token, token)
 			uid = decoded_token.get("uid")
 			if not uid:
 				logger.error("Missing localId in Firebase user data")
 				raise InvalidCredentialsException(status_code=401, message="Invalid token - no UID found")
 
-			user_doc = self.db.collection(Collections.USERS).document(uid).get()
+			user_doc = await asyncio.to_thread(
+				self.db.collection(Collections.USERS).document(uid).get
+			)
 			if not user_doc.exists:
 				logger.warning(f"User profile not found in Firestore for user_id: {uid}")
 				raise NotFoundException(status_code=404, message="User profile not found")
@@ -121,7 +135,7 @@ class UserService:
 			raise UnAuthorizedException
 
 
-	def reset_password(self, payload: schemas.ResetPasswordRequest):
+	async def reset_password(self, payload: schemas.ResetPasswordRequest):
 		params = {
 			"key": self.api_key
         }
@@ -131,7 +145,12 @@ class UserService:
 			"continueUrl": RedirectUrl.LOGIN
 		}
 		try:
-			resp = requests.post(FirebaseAccessUrl.SEND_MAIL, json=data, params=params)
+			resp = await asyncio.to_thread(
+				requests.post, 
+				FirebaseAccessUrl.SEND_MAIL, 
+				json=data, 
+				params=params
+			)
 			if resp.status_code != 200:
 				logger.error(f"Firebase API error: {resp.status_code} - {resp.text}")
 				raise ResourceNotFoundException(
@@ -144,9 +163,9 @@ class UserService:
 			self._handle_firebase_auth_error(e, "reset password")
 
 
-	def resend_verification(self, payload: schemas.ResendVerificationLink):
+	async def resend_verification(self, payload: schemas.ResendVerificationLink):
 		try:
-			decoded_token = auth.verify_id_token(payload.token)
+			decoded_token = await asyncio.to_thread(auth.verify_id_token, payload.token)
 			user_email = decoded_token.get('email')
 			email_verified = decoded_token.get('email_verified')
 			if not user_email:
@@ -165,7 +184,12 @@ class UserService:
 			"continueUrl": RedirectUrl.LOGIN
 		}
 		try:
-			resp = requests.post(FirebaseAccessUrl.SEND_MAIL, json=data, params=params)
+			resp = await asyncio.to_thread(
+				requests.post, 
+				FirebaseAccessUrl.SEND_MAIL, 
+				json=data, 
+				params=params
+			)
 			if resp.status_code != 200:
 				raise InvalidValueException(
                     status_code=400,

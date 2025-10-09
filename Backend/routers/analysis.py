@@ -45,7 +45,7 @@ async def map_ducument_id_to_analysis_id(document_ids, analysis_id):
     db=get_firestore_client()
     update_data = {"analysis_id": analysis_id, "updated_at": datetime.now()}
     query = db.collection(Collections.DOCUMENTS).where("document_id", "in", document_ids)
-    docs_stream = query.stream()
+    docs_stream = await asyncio.to_thread(lambda: list(query.stream()))
     batch = db.batch()
     documents = []
         
@@ -59,7 +59,7 @@ async def map_ducument_id_to_analysis_id(document_ids, analysis_id):
         
     # D. Commit the batch
     if count > 0:
-        batch.commit()
+        await asyncio.to_thread(batch.commit)
         logger.info(f"Successfully updated {count} documents with analysis_id: {analysis_id}")
     else:
         raise NotFoundException("Invalid document_ids provided")
@@ -101,11 +101,7 @@ async def start_analysis(
 
         try:
             doc_ref = firestore_client.collection(Collections.USER_ANALYSIS_MAPPING).document(analysis_id)
-            await asyncio.get_event_loop().run_in_executor(
-                None, 
-                doc_ref.set,
-                analysis_user_mapping_doc
-            )
+            await asyncio.to_thread(doc_ref.set, analysis_user_mapping_doc)
         except Exception as db_error:
             logger.error(f"Failed to create analysis user mapping: {db_error}")
             raise HTTPException(
@@ -330,8 +326,7 @@ async def update_weighting(
         )
     
     try:
-        doc = await asyncio.get_event_loop().run_in_executor(
-            None,
+        doc = await asyncio.to_thread(
             lambda: firestore_client.collection(Collections.ANALYSIS).document(analysis_id).get()
         )
         

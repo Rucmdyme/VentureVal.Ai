@@ -309,7 +309,7 @@ class DocumentService:
             )
         query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
         try:
-            results = query.stream()
+            results = await asyncio.to_thread(lambda: list(query.stream()))
             
             # 5. Process and Return Data
             mappings = []

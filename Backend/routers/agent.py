@@ -473,7 +473,7 @@ async def generate_ai_response_with_suggestions(context_prompt: str, question: s
             
             return response.text
         
-        response_text = await asyncio.get_event_loop().run_in_executor(None, _generate_response)
+        response_text = await asyncio.to_thread(_generate_response)
         
         if not response_text or not response_text.strip():
             raise HTTPException(status_code=500, detail="AI model returned empty response")

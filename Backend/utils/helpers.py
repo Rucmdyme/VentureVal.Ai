@@ -40,7 +40,7 @@ async def match_user_and_analysis_id(user_id: str, analysis_id: str = None, incl
         query = query.where("is_active", "==", True)
     query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
     try:
-        results = query.stream()
+        results = await asyncio.to_thread(lambda: list(query.stream()))
         
         # 5. Process and Return Data
         mappings = []
@@ -61,11 +61,7 @@ async def db_insert(unique_id: str, collection: str, data: dict):
     data = {**data, "created_at": datetime.now()}
     try:
         doc_ref = db.collection(collection).document(unique_id)
-        await asyncio.get_event_loop().run_in_executor(
-            None, 
-            doc_ref.set,
-            data
-        )
+        await asyncio.to_thread(doc_ref.set, data)
     except Exception as db_error:
         logger.error(f"Failed to create analysis record: {db_error}")
         raise HTTPException(
@@ -77,8 +73,7 @@ async def db_update(unique_id: str, collection: str, data: dict)-> dict:
     db=get_firestore_client()
     data = {**data, "updated_at": datetime.now()}
     try:
-        await asyncio.get_event_loop().run_in_executor(
-            None,
+        await asyncio.to_thread(
             lambda: db.collection(collection).document(unique_id).update(data)
         )
     except Exception as db_error:
@@ -91,10 +86,9 @@ async def db_update(unique_id: str, collection: str, data: dict)-> dict:
 async def db_get(collection: str, unique_id: str)-> dict:
     db=get_firestore_client()
     try:
-        doc = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: db.collection(collection).document(unique_id).get()
-            )
+        doc = await asyncio.to_thread(
+            lambda: db.collection(collection).document(unique_id).get()
+        )
         return doc.to_dict()
     except Exception as db_error:
         logger.error(f"Failed to fetch analysis record: {db_error}")

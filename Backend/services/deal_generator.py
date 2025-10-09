@@ -417,8 +417,7 @@ class DealNoteGenerator:
                     candidate_count=1
                 )
 
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None, 
+                response = await asyncio.to_thread(
                     lambda: self._model.models.generate_content(model=GEMINI_MODEL,contents = [prompt], config=generation_config)
                 )
                 
