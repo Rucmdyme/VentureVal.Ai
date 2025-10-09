@@ -2,7 +2,8 @@
 
 # services/weighting_calculator.py
 from typing import Dict, List
-from utils.helpers import update_progress
+from utils.helpers import db_insert, db_update
+from constants import Collections
 
 
 class WeightingCalculator:
@@ -17,7 +18,7 @@ class WeightingCalculator:
         }
 
     async def calculate_weighted_score(self, analysis_id: str, startup_data: Dict, risk_assessment: Dict, 
-                                     benchmark_results: Dict, weighting_config: Dict) -> Dict:
+                                     benchmark_results: Dict, weighting_config: Dict, operation_type: str = "insert") -> Dict:
         """Apply custom weightings to generate final scores"""
         
         weights = weighting_config.get('weights', self.default_weights)
@@ -27,8 +28,6 @@ class WeightingCalculator:
             raise ValueError("Weights must sum to 100%")
         
         # Calculate dimension scores (1-10 scale)
-        # TODO: error handling and updates in db for analysis (maybe in different collection)
-        # await update_progress(analysis_id, analyzing_DSFCDS = "kjhfguierhgfiluheriljfhervioer")
         dimension_scores = {
             'growth_potential': self.calculate_growth_score(startup_data, benchmark_results),
             'market_opportunity': self.calculate_market_score(startup_data),
@@ -51,14 +50,18 @@ class WeightingCalculator:
         recommendation = self.generate_weighted_recommendation(
             weighted_score, dimension_scores, weights, risk_assessment
         )
-        
-        return {
+        data = {
             'overall_score': round(weighted_score, 2),
             'dimension_scores': dimension_scores,
             'weights_applied': weights,
             'recommendation': recommendation,
             'risk_penalty': risk_penalty
         }
+        if operation_type == "insert":
+            await db_insert(analysis_id, Collections.WEIGHTED_SCORES, data)
+        else:
+            await db_update(analysis_id, Collections.WEIGHTED_SCORES, data)
+        return data
 
     def calculate_growth_score(self, data: Dict, benchmarks: Dict) -> float:
         """Calculate growth potential score"""

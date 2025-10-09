@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Enhanced text cleaning utilities for Gemini API responses.
 Handles comprehensive formatting cleanup for all data types.

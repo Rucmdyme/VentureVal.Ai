@@ -2,7 +2,6 @@
 
 # utils/ai_client.py
 from google import genai
-import os
 from functools import wraps
 from datetime import datetime
 from fastapi import HTTPException
@@ -16,16 +15,17 @@ logger = logging.getLogger(__name__)
 cost_monitor = None
 _gemini_configured = False
 
+_gemini_client = None
+
 def configure_gemini():
-    """Centralized Gemini configuration"""
-    global _gemini_configured
+    """Centralized Gemini configuration with singleton pattern"""
+    global _gemini_configured, _gemini_client
     
-    if _gemini_configured:
+    if _gemini_configured and _gemini_client:
         return True
     
     try:
-        # TODO: implement better check for if gemini is configured
-        client = genai.Client(
+        _gemini_client = genai.Client(
             vertexai=True,
             project=PROJECT_ID,
             location=GCP_REGION
@@ -35,7 +35,14 @@ def configure_gemini():
         return True
     except Exception as e:
         logger.error(f"Failed to configure Gemini: {e}")
-        return False
+        raise e
+
+def get_gemini_client():
+    """Get the singleton Gemini client instance"""
+    global _gemini_client
+    if _gemini_client is None:
+        configure_gemini()
+    return _gemini_client
 
 def init_ai_clients():
     """Initialize AI service clients"""

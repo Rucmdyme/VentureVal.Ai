@@ -3,19 +3,18 @@ import asyncio
 from typing import Dict, List, Optional, Any
 import json
 import logging
-from google import genai
-from utils.ai_client import configure_gemini
-from settings import PROJECT_ID, GCP_REGION
+from utils.ai_client import get_gemini_client
+from settings import GEMINI_MODEL
 from utils.enhanced_text_cleaner import sanitize_for_frontend
+from utils.helpers import db_insert
+from constants import Collections
 
 logger = logging.getLogger(__name__)
 
 class RiskAnalyzer:
     def __init__(self):
         """Initialize risk analyzer with proper API configuration"""
-        
-        # Configure Gemini API
-        configure_gemini()
+        self.model = get_gemini_client()
         
         # Risk category weights for overall scoring
         self.risk_weights = {
@@ -33,77 +32,81 @@ class RiskAnalyzer:
             'high': (7, 10)
         }
         
-    async def analyze_risks(self, startup_data: Dict) -> Dict:
+    async def analyze_risks(self, analysis_id, startup_data: Dict) -> Dict:
         """Comprehensive risk assessment across 5 categories with AI-first approach"""
+        risk_data = {}
         
         if not startup_data:
-            return {
+            risk_data =  {
                 'error': 'No startup data provided for risk analysis',
                 'risk_scores': {},
                 'overall_risk_score': 0,
                 'risk_explanations': []
             }
         
-        try:
-            # AI-first approach: Try AI analysis for each category first
-            risk_analysis_tasks = [
-                self._analyze_category_risks_ai_first(startup_data, "financial"),
-                self._analyze_category_risks_ai_first(startup_data, "market"),
-                self._analyze_category_risks_ai_first(startup_data, "team"),
-                self._analyze_category_risks_ai_first(startup_data, "product"),
-                self._analyze_category_risks_ai_first(startup_data, "operational")
-            ]
-            
-            # Execute all risk analyses concurrently
-            risk_results = await asyncio.gather(*risk_analysis_tasks, return_exceptions=True)
-            
-            # Process results and handle any exceptions
-            risks = {}
-            categories = ['financial', 'market', 'team', 'product', 'operational']
-            
-            for i, (category, result) in enumerate(zip(categories, risk_results)):
-                if isinstance(result, Exception):
-                    logger.error(f"Error analyzing {category} risks: {result}")
-                    # Use fallback risks for this category
-                    risks[category] = self._generate_fallback_risks(category, startup_data)
-                else:
-                    risks[category] = result
+        else:
+            try:
+                # AI-first approach: Try AI analysis for each category first
+                risk_analysis_tasks = [
+                    self._analyze_category_risks_ai_first(startup_data, "financial"),
+                    self._analyze_category_risks_ai_first(startup_data, "market"),
+                    self._analyze_category_risks_ai_first(startup_data, "team"),
+                    self._analyze_category_risks_ai_first(startup_data, "product"),
+                    self._analyze_category_risks_ai_first(startup_data, "operational")
+                ]
+                
+                # Execute all risk analysis concurrently
+                risk_results = await asyncio.gather(*risk_analysis_tasks, return_exceptions=True)
+                
+                # Process results and handle any exceptions
+                risks = {}
+                categories = ['financial', 'market', 'team', 'product', 'operational']
+                
+                for i, (category, result) in enumerate(zip(categories, risk_results)):
+                    if isinstance(result, Exception):
+                        logger.error(f"Error analyzing {category} risks: {result}")
+                        # Use fallback risks for this category
+                        risks[category] = self._generate_fallback_risks(category, startup_data)
+                    else:
+                        risks[category] = result
 
-            # Simple deduplication across categories (keep risk in first category it appears)
-            risks = self._simple_deduplicate_across_categories(risks)
-            
-            # Calculate overall risk score
-            overall_risk = self.calculate_overall_risk(risks)
-            
-            # Generate risk explanations
-            risk_explanations = await self.generate_risk_explanations(risks)
-            
-            # Calculate additional risk metrics
-            risk_summary = self.calculate_risk_summary(risks)
-            
-            return {
-                'risk_scores': risks,
-                'overall_risk_score': overall_risk,
-                'risk_explanations': risk_explanations,
-                'risk_summary': risk_summary,
-                'analysis_metadata': {
-                    'categories_analyzed': len(categories),
-                    'total_risks_identified': sum(len(risk_list) for risk_list in risks.values()),
-                    'high_severity_risks': sum(
-                        len([r for r in risk_list if r.get('severity', 0) >= 7]) 
-                        for risk_list in risks.values()
-                    )
+                # Simple deduplication across categories (keep risk in first category it appears)
+                risks = self._simple_deduplicate_across_categories(risks)
+                
+                # Calculate overall risk score
+                overall_risk = self.calculate_overall_risk(risks)
+                
+                # Generate risk explanations
+                risk_explanations = await self.generate_risk_explanations(risks)
+                
+                # Calculate additional risk metrics
+                risk_summary = self.calculate_risk_summary(risks)
+                
+                risk_data = {
+                    'risk_scores': risks,
+                    'overall_risk_score': overall_risk,
+                    'risk_explanations': risk_explanations,
+                    'risk_summary': risk_summary,
+                    'analysis_metadata': {
+                        'categories_analyzed': len(categories),
+                        'total_risks_identified': sum(len(risk_list) for risk_list in risks.values()),
+                        'high_severity_risks': sum(
+                            len([r for r in risk_list if r.get('severity', 0) >= 7]) 
+                            for risk_list in risks.values()
+                        )
+                    }
                 }
-            }
-        
-        except Exception as e:
-            logger.error(f"Risk analysis failed: {e}")
-            return {
-                'error': f'Risk analysis failed: {str(e)}',
-                'risk_scores': {},
-                'overall_risk_score': 10,  # Maximum risk due to analysis failure
-                'risk_explanations': ['Risk analysis could not be completed']
-            }
+            
+            except Exception as e:
+                logger.error(f"Risk analysis failed: {e}")
+                risk_data = {
+                    'error': f'Risk analysis failed: {str(e)}',
+                    'risk_scores': {},
+                    'overall_risk_score': 10,  # Maximum risk due to analysis failure
+                    'risk_explanations': ['Risk analysis could not be completed']
+                }
+        await db_insert(analysis_id, Collections.RISK_ANALYSIS, risk_data)
+        return risk_data
 
     def _generate_fallback_risks(self, category: str, data: Dict) -> List[Dict]:
         """Generate fallback risks when AI analysis fails or returns insufficient risks"""
@@ -697,14 +700,7 @@ class RiskAnalyzer:
 
             Return only the JSON array with risks specifically related to key metric: {risk_context} and focus area: {focus_area.lower()}.
             """
-            
-            model = genai.Client(
-                vertexai=True,
-                project=PROJECT_ID,
-                location=GCP_REGION
-            )
-            
-            response = await asyncio.to_thread(model.models.generate_content, model="gemini-2.5-flash", contents=[prompt])
+            response = await asyncio.to_thread(self.model.models.generate_content, model=GEMINI_MODEL, contents=[prompt])
 
             if not response or not hasattr(response, 'text') or not response.text:
                 logger.error(f"Empty risk response for {risk_context}")

@@ -1,18 +1,17 @@
 # services/deal_generator.py
-from google import genai
 from google.genai import types
 
-import json
 import logging
 from typing import Dict, Optional, Any, List
 from datetime import datetime
-import os
 from dataclasses import dataclass
 import asyncio
 from functools import wraps
-from utils.ai_client import configure_gemini
-from settings import PROJECT_ID, GCP_REGION
+from utils.ai_client import get_gemini_client
+from settings import GEMINI_MODEL
 from utils.enhanced_text_cleaner import sanitize_for_frontend
+from constants import Collections
+from utils.helpers import db_insert, db_update
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ class DealNoteConfig:
     max_prompt_length: int = 12000
     max_retries: int = 3
     timeout_seconds: int = 60
-    model_name: str = 'gemini-2.5-flash'
+    model_name: str = GEMINI_MODEL
     temperature: float = 0.3
 
 def async_timeout(seconds: int):
@@ -65,50 +64,63 @@ class DealNoteGenerator:
     def _initialize_genai(self):
         """Initialize Google Generative AI with proper error handling"""
         try:
-            configure_gemini()
-            self._model = genai.Client(
-                vertexai=True,
-                project=PROJECT_ID,
-                location=GCP_REGION
-            )
-            
+            self._model = get_gemini_client()
             logger.info("Google Generative AI initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Google Generative AI: {e}")
             self._model = None
+
+    async def update_user_analysis_mapping_details(self, analysis_id, startup_data):
+        company_name = startup_data.get("company_name")
+        summary_stats =  startup_data.get("summary_stats") or {}
+        data_to_update = {
+            "company_name": company_name,
+            "sector": summary_stats.get("sector"),
+            "stage": summary_stats.get("stage"),
+            "geography": summary_stats.get("geography")
+        }
+        try:
+            await db_update(analysis_id, Collections.USER_ANALYSIS_MAPPING, data_to_update)
+        except Exception as error:
+            logger.error(f"Error while updating analysis mapping details: {error}")
+
     
     @async_timeout(60)
     async def generate_deal_note(
         self, 
+        analysis_id: str,
         startup_data: Dict[str, Any], 
         risk_assessment: Dict[str, Any], 
         benchmark_results: Dict[str, Any], 
         weighted_scores: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Generate comprehensive deal note with robust error handling"""
+        data = {}
         
         # Validate inputs
         if not self._validate_inputs(startup_data, risk_assessment, benchmark_results, weighted_scores):
-            return self._create_error_response("Invalid input data provided")
+            data = self._create_error_response("Invalid input data provided")
         
         # Check if AI model is available
-        if not self._model:
+        elif not self._model:
             logger.warning("AI model not available, generating fallback summary")
-            return self._create_fallback_response(startup_data, weighted_scores, "AI model not initialized")
-        
-        try:
-            # Generate the deal note with retries
-            content = await self._generate_with_retries(
-                startup_data, risk_assessment, benchmark_results, weighted_scores
-            )
-
-            return self._create_success_response(
-                startup_data, weighted_scores, risk_assessment, content, benchmark_results
-            )
-            
-        except Exception as e:
-            logger.error(f"Deal note generation failed: {e}")
-            return self._create_fallback_response(startup_data, weighted_scores, str(e))
+            data = self._create_fallback_response(startup_data, weighted_scores, "AI model not initialized")
+        else:
+            try:
+                # Generate the deal note with retries
+                content = await self._generate_with_retries(
+                    startup_data, risk_assessment, benchmark_results, weighted_scores
+                )
+                data = self._create_success_response(
+                    startup_data, weighted_scores, risk_assessment, content, benchmark_results
+                )
+                await self.update_user_analysis_mapping_details(analysis_id, data)
+                
+            except Exception as e:
+                logger.error(f"Deal note generation failed: {e}")
+                data = self._create_fallback_response(startup_data, weighted_scores, str(e))
+        await db_insert(analysis_id, Collections.DEAL_NOTE, data)
+        return data
     
 
     def _calculate_years_in_operation(self, founded_value: Any) -> Optional[int]:
@@ -405,9 +417,8 @@ class DealNoteGenerator:
                     candidate_count=1
                 )
 
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None, 
-                    lambda: self._model.models.generate_content(model="gemini-2.5-flash",contents = [prompt], config=generation_config)
+                response = await asyncio.to_thread(
+                    lambda: self._model.models.generate_content(model=GEMINI_MODEL,contents = [prompt], config=generation_config)
                 )
                 
                 if response and hasattr(response, 'text') and response.text:
