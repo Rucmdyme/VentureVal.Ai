@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional
 import logging
 import asyncio
 
-from routers.analysis import fetch_analysis_data
+from services.analysis_service import AnalysisService
 from models.schemas import ChatRequest, ChatResponse
 from utils.ai_client import monitor_usage, get_gemini_client
 from utils.auth_utils import require_user_or_none
@@ -136,7 +136,7 @@ async def get_analysis_data(analysis_id: str) -> Dict[str, Any]:
     """Retrieve and validate analysis data"""
     
     try:
-        analysis_data = await fetch_analysis_data(analysis_id)
+        analysis_data = await AnalysisService().fetch_analysis_data(analysis_id)
         if not analysis_data:
             raise HTTPException(status_code=404, detail="Analysis data is empty")
             
