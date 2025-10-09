@@ -16,6 +16,7 @@ import ChatIcon from "@mui/icons-material/Chat";
 import CloseIcon from "@mui/icons-material/Close";
 import SendIcon from "@mui/icons-material/Send";
 import BoltIcon from "@mui/icons-material/Bolt";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
 
 const API_ENDPOINT =
   "https://ventureval-be-1094484866096.asia-south1.run.app/agent/agent/chat";
@@ -27,6 +28,7 @@ const ChatBot = ({
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [dots, setDots] = useState("");
   const [suggestedQuestions, setSuggestedQuestions] = useState([
     "What are the key risk factors in my pitch deck?",
     "How does my valuation compare to similar companies?",
@@ -39,6 +41,17 @@ const ChatBot = ({
 
   const messagesEndRef = useRef(null);
   const chatDrawerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setDots("");
+      return;
+    }
+    const interval = setInterval(() => {
+      setDots((prev) => (prev.length < 3 ? prev + "." : ""));
+    }, 500);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   const getCurrentTime = () => {
     return new Date().toLocaleTimeString("en-US", {
@@ -198,13 +211,15 @@ const ChatBot = ({
         anchor="right"
         open={isOpen}
         onClose={() => setIsOpen(false)}
-        variant="temporary"
         sx={{
           "& .MuiDrawer-paper": {
-            width: { xs: "100%", sm: 400 },
-            boxSizing: "border-box",
-            borderRadius: "16px 0 0 16px",
+            width: { xs: "90%", md: "28%" },
+            height: "80%",
+            borderRadius: "16px",
             background: "linear-gradient(180deg, #f0f4f9 0%, #e0e8f2 100%)",
+            bottom: "18px",
+            right: "18px",
+            top: "auto",
           },
         }}
       >
@@ -219,7 +234,7 @@ const ChatBot = ({
               px: 2,
               background: "linear-gradient(135deg, #9c27b0, #2979ff)",
               color: "white",
-              borderRadius: "16px 0 0 0",
+              borderRadius: "0px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -227,14 +242,14 @@ const ChatBot = ({
             }}
           >
             <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar sx={{ bgcolor: "#fff", color: "#5a5ae5" }}>🤖</Avatar>
+              <Avatar sx={{ bgcolor: "#fff", color: "#5a5ae5" }}>
+                <SmartToyIcon />
+              </Avatar>
               <Box>
                 <Typography sx={{ fontWeight: "bold" }}>Dealio</Typography>
                 <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <Typography sx={{ fontSize: 12, opacity: 0.8 }}>
-                    {isLoading
-                      ? " Dealio is thinking..."
-                      : "Always here to help"}
+                    {isLoading ? `Thinking${dots}` : "Always here to help"}
                   </Typography>
                 </Box>
               </Box>
@@ -299,22 +314,20 @@ const ChatBot = ({
               </Box>
             ))}
             {isLoading && (
-              <Box sx={{ alignSelf: "flex-start", maxWidth: "80%" }}>
-                <Paper
+              <Box sx={{ alignSelf: "flex-start", mx: 2 }}>
+                <Box
                   sx={{
-                    p: 1.5,
-                    borderRadius: "16px",
-                    backgroundColor: "#e3e6e9",
-                    color: "#333",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    backgroundColor: "black",
+                    animation: "pulse 1s infinite",
+                    "@keyframes pulse": {
+                      "0%, 100%": { transform: "scale(1)" },
+                      "50%": { transform: "scale(1.5)" }, // increase size at midpoint
+                    },
                   }}
-                >
-                  <Typography variant="body1">...</Typography>
-                  <CircularProgress size={12} color="inherit" />
-                </Paper>
+                />
               </Box>
             )}
             <Box ref={messagesEndRef} />
@@ -337,7 +350,7 @@ const ChatBot = ({
                       width: 24,
                       height: 24,
                       fontSize: "14px",
-                      background: "linear-gradient(135deg, #007bff, #5a5ae5)",
+                      background: "linear-gradient(90deg, #9c27b0, #2979ff)",
                       boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
                     }}
                   >
@@ -415,14 +428,17 @@ const ChatBot = ({
               <IconButton
                 color="primary"
                 onClick={() => handleSendMessage(inputValue)}
-                disabled={!inputValue.trim()}
+                disabled={isLoading}
                 sx={{
                   width: 36,
                   height: 36,
                   borderRadius: "50%",
-                  background: "linear-gradient(135deg, #9c27b0, #2979ff)",
+                  background: "linear-gradient(90deg, #9c27b0, #2979ff)",
                   boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
                   transition: "background 0.3s ease",
+                  "&.Mui-disabled": {
+                    background: "#cccccc",
+                  },
                 }}
               >
                 <SendIcon sx={{ color: "white", fontSize: 16 }} />

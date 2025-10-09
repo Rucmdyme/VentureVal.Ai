@@ -5,6 +5,7 @@ import {
   Card,
   CardContent,
   Grid,
+  TextField,
   Typography,
 } from "@mui/material";
 import logo from "../../assets/logo.jpg";
@@ -23,6 +24,7 @@ import {
 import UploadButton from "../../components/uploadButton";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { Link as ScrollLink } from "react-scroll";
 
 const initialSelectedFiles = {
   pitch_deck: [],
@@ -49,10 +51,6 @@ function HomePage() {
     setPreset("Default (Custom)");
     setApiProgress(0);
     setSelectedFiles(initialSelectedFiles);
-  };
-
-  const handleScroll = () => {
-    uploadRef.current.scrollIntoView({ behavior: "smooth" });
   };
 
   const pollAnalysisStatus = async (analysis_id, interval = 10000) => {
@@ -168,6 +166,7 @@ function HomePage() {
   return (
     <Box sx={{ mx: 2 }}>
       <Box
+        id="home"
         sx={{
           py: 10,
         }}
@@ -178,23 +177,27 @@ function HomePage() {
               sx={{ fontWeight: "bold", fontSize: { xs: 28, md: 40 } }}
               mb={2}
             >
-              Transform Your Deal Flow with{" "}
+              Evaluate Startups Smarter with{" "}
               <Box component="span" color="#2979ff">
-                AI-Powered Analysis
+                AI-Powered Insights
               </Box>
             </Typography>
             <Typography sx={{ color: "#666666" }} mb={3}>
-              Upload pitch decks, call transcripts, founder updates, and emails
-              to generate structured deal notes instantly.
+              Let our AI turn founder materials and public data into concise,
+              investor-ready insights — saving hours of manual analysis.
             </Typography>
             <Button
               variant="contained"
               size="large"
-              onClick={handleScroll}
+              component={ScrollLink}
+              to="analyze"
+              smooth={true}
+              duration={500}
+              offset={-80}
               sx={{ borderRadius: 2, bgcolor: "#2979ff" }}
               endIcon={<ArrowForwardIcon />}
             >
-              Upload Deal Materials
+              Analyze Startup Data
             </Button>
           </Grid>
 
@@ -215,17 +218,18 @@ function HomePage() {
 
       <Box
         ref={uploadRef}
+        id="analyze"
         sx={{ py: 4, px: { xs: 2, md: 8 }, bgcolor: "#FAFAFA" }}
       >
         <Typography
           align="center"
           sx={{ fontSize: 24, fontWeight: "bold", mb: 1 }}
         >
-          Upload Your Deal Materials
+          Turn Raw Information to Investor-Ready Notes
         </Typography>
         <Typography align="center" sx={{ color: "#666666", mb: 6 }}>
-          Drop your documents below and let our Al analyze them to generate
-          comprehensive deal notes
+          Upload your documents and let our AI instantly turn them into
+          investor-ready deal notes
         </Typography>
         <Grid container spacing={4}>
           {materialTypes.map((item) => (
@@ -300,7 +304,7 @@ function HomePage() {
         </Box>
       </Box>
 
-      <Box sx={{ py: 4, px: { xs: 2, md: 20 } }}>
+      <Box id="features" sx={{ py: 4, px: { xs: 2, md: 20 } }}>
         <Typography
           align="center"
           sx={{ fontSize: 24, fontWeight: "bold", mb: 1 }}

@@ -14,6 +14,11 @@ export const SERVICES = [
     service_name: "AGENT",
     baseURL: `${import.meta.env.VITE_API_URL}`,
   },
+  {
+    service_key: "user",
+    service_name: "USER",
+    baseURL: `${import.meta.env.VITE_API_URL}`,
+  },
 ];
 
 export const API_ENDPOINTS = {
@@ -25,5 +30,9 @@ export const API_ENDPOINTS = {
   },
   AGENT: {
     CHAT: "/agent/chat",
+  },
+  USER: {
+    SIGNUP: "/signup",
+    LOGIN: "/login",
   },
 };
