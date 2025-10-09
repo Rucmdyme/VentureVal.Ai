@@ -308,13 +308,20 @@ class DocumentService:
         self.db = db or get_firestore_client()
         self.bucket = get_storage_bucket()
 
-    async def fetch_document_details(self, document_ids, user_id):
-        query = self.db.collection(Collections.DOCUMENTS).where(
+    async def fetch_document_details_from_db(self, document_ids, user_id, analysis_id):
+        query = self.db.collection(Collections.DOCUMENTS)
+        if document_ids:
+            query = query.where(
             "document_id", "in", document_ids
         )
+
         if user_id:
             query = query.where(
                 "user_id", "==", user_id
+            )
+        if analysis_id:
+            query = query.where(
+                "analysis_id", "==", analysis_id
             )
         query = query.order_by("created_at", direction=firestore.Query.DESCENDING)
         try:
@@ -334,14 +341,8 @@ class DocumentService:
             raise ServerException
 
 
-    async def generate_download_urls(self, document_id: str, user_id) -> Dict[str, str]:
-        """Convert storage paths to download URLs"""
-        document_details = await self.fetch_document_details([document_id], user_id)
-        if not document_details:
-            raise NotFoundException(message="File does not exist")
-        document_details = document_details[0]
-        storage_path = document_details["storage_path"]
-
+    async def generate_download_url(self, document: dict):
+        storage_path = document["storage_path"]
         try:
             blob = self.bucket.blob(storage_path)
 
@@ -356,11 +357,21 @@ class DocumentService:
                 method="GET"
             )
 
-            document_details["download_url"] = download_url
+            document["download_url"] = download_url
 
         except Exception as e:
             logger.error(f"Failed to generate download URL for {storage_path}: {e}")
-        return document_details
+        return document
+
+    async def get_document_details(self, document_ids: List[str], user_id: str, analysis_id: str = None, is_download_url_required: bool = False) -> Dict[str, str]:
+        """Convert storage paths to download URLs"""
+        documents = await self.fetch_document_details_from_db(document_ids, user_id, analysis_id)
+        if document_ids and not documents:
+            raise NotFoundException(message="File does not exist")
+        if is_download_url_required:
+            download_url_tasks = [self.generate_download_url(document) for document in documents]
+            documents = await asyncio.gather(*download_url_tasks)
+        return documents
     
 
     async def generate_presigned_url(self, payload, user_id):

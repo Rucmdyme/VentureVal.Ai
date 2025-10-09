@@ -20,10 +20,18 @@ class WeightingConfig(BaseModel):
 
 class AnalysisRequest(BaseModel):
     idtoken: Optional[str] = None
-    storage_paths: List[str]
+    storage_paths: Optional[List[str]] = None
+    document_ids: Optional[List[str]] = None
     company_name: Optional[str] = None
     company_url: Optional[str] = None
     weighting_config: Optional[WeightingConfig] = None
+    @root_validator(pre=True)
+    def handle_storage_path_validations(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        storage_paths = values.get('storage_paths')
+        document_ids = values.get('document_ids')
+        if not storage_paths and not document_ids:
+            raise ValueError("Either storage_path or document_ids required")
+        return values
 
 class AnalysisResponse(BaseModel):
     analysis_id: str
@@ -53,6 +61,13 @@ class DocumentUploadRequest(BaseModel):
     idtoken: Optional[str] = None
     filename: str
     file_type: FileType = Field(..., description="Type of document being uploaded")
+
+
+class DocumentDetailsRequest(BaseModel):
+    idtoken: Optional[str] = None
+    document_id: List[str] = None
+    analysis_id: Optional[str] = None
+    is_download_url_required: bool = False
 
 # User schemas for user management
 

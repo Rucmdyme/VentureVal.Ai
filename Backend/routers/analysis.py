@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from datetime import datetime
 import asyncio
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 import uuid
 
 from models.schemas import AnalysisRequest, AnalysisResponse
@@ -41,6 +41,30 @@ def get_deal_generator():
 def get_weighting_calculator():
     return WeightingCalculator()
 
+async def map_ducument_id_to_analysis_id(document_ids, analysis_id):
+    db=get_firestore_client()
+    update_data = {"analysis_id": analysis_id, "updated_at": datetime.now()}
+    query = db.collection(Collections.DOCUMENTS).where("document_id", "in", document_ids)
+    docs_stream = query.stream()
+    batch = db.batch()
+    documents = []
+        
+    count = 0
+    for doc in docs_stream:
+        # C. Add an update operation for EACH document reference
+        doc_data = doc.to_dict()
+        documents.append(doc_data["storage_path"])
+        batch.update(doc.reference, update_data)
+        count += 1
+        
+    # D. Commit the batch
+    if count > 0:
+        batch.commit()
+        logger.info(f"Successfully updated {count} documents with analysis_id: {analysis_id}")
+    else:
+        raise NotFoundException("Invalid document_ids provided")
+    return documents
+
 
 @router.post("/start", response_model=AnalysisResponse)
 @require_user_or_none
@@ -58,17 +82,20 @@ async def start_analysis(
         user_id = user_info["user_id"]
     
     try:
-        if not payload.storage_paths:
-            raise HTTPException(status_code=400, detail="At least one storage path is required")
         # Create analysis session
         analysis_id = f"analysis_{uuid.uuid4().hex}"
+        if payload.document_ids:
+            storage_paths = await map_ducument_id_to_analysis_id(payload.document_ids, analysis_id)
+        else:
+            storage_paths = payload.storage_paths
         
         # Store initial session
         analysis_user_mapping_doc = {
             'analysis_id': analysis_id,
             'user_id': user_id,
             'is_active': True,
-            'storage_paths': payload.storage_paths,
+            'storage_paths': storage_paths,
+            'document_ids': payload.document_ids,
             'created_at': datetime.now(),
         }
 
@@ -91,7 +118,8 @@ async def start_analysis(
             'user_id': user_id,
             'status': 'processing',
             'company_name': payload.company_name or 'Unknown',
-            'storage_paths': payload.storage_paths,
+            'storage_paths': storage_paths,
+            'document_ids': payload.document_ids,
             'weighting_config': payload.weighting_config.model_dump() if payload.weighting_config else None,
             'created_at': datetime.now(),
             'progress': 0,
@@ -107,9 +135,12 @@ async def start_analysis(
                 status_code=500, 
                 detail="Failed to initialize analysis"
             )
+        
+        
+        
 
         # Start background processing
-        background_tasks.add_task(process_analysis_safe, analysis_id, payload)
+        background_tasks.add_task(process_analysis_safe, analysis_id, payload, storage_paths)
         
         return AnalysisResponse(
             analysis_id=analysis_id,
@@ -124,10 +155,10 @@ async def start_analysis(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def process_analysis_safe(analysis_id: str, request: AnalysisRequest):
+async def process_analysis_safe(analysis_id: str, request: AnalysisRequest, storage_paths: List[str]):
     """Safe wrapper for analysis processing with comprehensive error handling"""
     try:
-        await process_analysis(analysis_id, request)
+        await process_analysis(analysis_id, request, storage_paths)
     except Exception as e:
         logger.error(f"Critical error in background analysis {analysis_id}: {e}")
         # Ensure error state is recorded even if process_analysis fails completely
@@ -143,7 +174,7 @@ async def process_analysis_safe(analysis_id: str, request: AnalysisRequest):
             logger.critical(f"Failed to record critical error for {analysis_id}: {update_error}")
 
 
-async def process_analysis(analysis_id: str, request: AnalysisRequest):
+async def process_analysis(analysis_id: str, request: AnalysisRequest, storage_paths: List[str]):
     """Background task for analysis processing with improved error handling"""
     
     # Get service instances
@@ -158,7 +189,7 @@ async def process_analysis(analysis_id: str, request: AnalysisRequest):
         await update_progress(analysis_id, 30, "Processing documents...")
         
         try:
-            processed_data = await doc_processor.process_documents_from_storage(request.storage_paths)
+            processed_data = await doc_processor.process_documents_from_storage(storage_paths)
         except Exception as e:
             raise ValueError(f"Document processing failed: {str(e)}")
         if not processed_data:
