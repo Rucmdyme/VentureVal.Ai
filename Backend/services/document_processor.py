@@ -2,22 +2,18 @@
 import asyncio
 import time
 import uuid
-import aiohttp
 import os
 from typing import List, Dict, Any
-from google import genai
 from firebase_admin import storage, firestore
 
 import json
 import logging
 from datetime import timedelta
 from pathlib import Path
-from io import BytesIO
-from utils.ai_client import configure_gemini
+from utils.ai_client import get_gemini_client
 from models.database import get_storage_bucket
-import re
 from urllib.parse import urlparse
-from settings import PROJECT_ID, GCP_REGION
+from settings import GEMINI_MODEL
 from utils.enhanced_text_cleaner import sanitize_for_frontend
 from utils.helpers import db_insert
 from models.database import get_firestore_client
@@ -32,19 +28,7 @@ class DocumentProcessor:
         with multi-modal analysis capabilities using the Gemini API.
         """
     def __init__(self):
-        self.gemini_available = configure_gemini()
-        if self.gemini_available:
-            self.model = genai.Client(
-                vertexai=True,
-                project=PROJECT_ID,
-                location=GCP_REGION
-            )
-            logger.info("DocumentProcessor initialized with Gemini multimodal support")
-        else:
-            logger.warning("Gemini not available - using basic text processing only")
-            self.model = None
-        
-        # File type classifications
+        self.model = get_gemini_client()        
 
     def get_file_uri(self, file_path: str) -> str:
         bucket = storage.bucket()
@@ -77,7 +61,7 @@ class DocumentProcessor:
             })
 
         try:
-            response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash", contents=contents)
+            response = await asyncio.to_thread(self.model.models.generate_content, model=GEMINI_MODEL, contents=contents)
             
             if not response or not hasattr(response, 'text') or not response.text:
                 logger.error(f"Empty synthesis response from Gemini while processing documents")

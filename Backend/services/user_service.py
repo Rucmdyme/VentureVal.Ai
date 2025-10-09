@@ -1,6 +1,5 @@
 
 from firebase_admin import auth
-from fastapi import HTTPException
 from models.database import firestore
 import requests
 import logging

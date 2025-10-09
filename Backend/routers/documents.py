@@ -6,7 +6,6 @@ from models.schemas import DocumentUploadRequest, DocumentDetailsRequest
 from services import document_processor
 from utils.auth_utils import require_user_or_none
 from exceptions import UnAuthorizedException
-from typing import List
 
 router = APIRouter()
 

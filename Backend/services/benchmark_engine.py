@@ -1,12 +1,10 @@
 # services/benchmark_engine.py
-import json
 import asyncio
 from typing import Dict, Optional
 from datetime import datetime
-from google import genai
-from utils.ai_client import configure_gemini
+from utils.ai_client import get_gemini_client
 import logging
-from settings import PROJECT_ID, GCP_REGION
+from settings import GEMINI_MODEL
 from utils.enhanced_text_cleaner import sanitize_for_frontend
 from utils.helpers import db_insert
 from constants import Collections
@@ -16,23 +14,12 @@ logger = logging.getLogger(__name__)
 class BenchmarkEngine:
     def __init__(self):
         """Initialize with Gemini configuration"""
-        self.gemini_available = configure_gemini()
-        if self.gemini_available:
-            self.model = genai.Client(
-                vertexai=True,
-                project=PROJECT_ID,
-                location=GCP_REGION
-            )
-            # self.model = genai.GenerativeModel('gemini-pro')
-            logger.info("BenchmarkEngine initialized with Gemini AI")
-        else:
-            logger.warning("BenchmarkEngine falling back to static benchmarks")
-            self.model = None
+        self.model = get_gemini_client()
     
     async def get_sector_benchmarks(self, sector: str, geography: str = 'US', stage: str = None) -> Dict:
         """Get benchmark data using Gemini AI or fallback to static data"""
         
-        if not self.gemini_available or not self.model:
+        if not self.model:
             logger.info("Using fallback benchmarks")
             return self.get_default_benchmarks()
         
@@ -130,7 +117,7 @@ class BenchmarkEngine:
             13. NEVER use strings like "N/A", "unknown", "TBD" - only numbers
             """
             
-            response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash", contents = [prompt])
+            response = await asyncio.to_thread(self.model.models.generate_content, model=GEMINI_MODEL, contents = [prompt])
             if response and hasattr(response, 'text') and response.text:
                 try:
                     return sanitize_for_frontend(response.text.strip())
@@ -184,14 +171,14 @@ class BenchmarkEngine:
         overall_score = self._calculate_overall_score(percentiles)
         
         # Generate insights if Gemini is available
-        insights = await self._generate_insights(startup_data, percentiles, sector) if self.gemini_available else []
+        insights = await self._generate_insights(startup_data, percentiles, sector) if self.model else []
         analysis_data = {
             'percentiles': percentiles,
             'overall_score': overall_score,
             'sector_benchmarks': benchmarks,
             'insights': insights,
             'analysis_date': datetime.now().isoformat(),
-            'data_source': 'gemini_ai' if self.gemini_available else 'static_fallback'
+            'data_source': 'gemini_ai' if self.model else 'static_fallback'
         }
         await db_insert(analysis_id, Collections.BENCHMARK_ANALYSIS, analysis_data)
         
@@ -342,7 +329,7 @@ class BenchmarkEngine:
             - Forward-looking with market context and competitive dynamics
             """
             
-            response = await asyncio.to_thread(self.model.models.generate_content, model="gemini-2.5-flash",contents = [prompt])
+            response = await asyncio.to_thread(self.model.models.generate_content, model=GEMINI_MODEL,contents = [prompt])
             insights = []
             if response and hasattr(response, 'text') and response.text:
                 try:

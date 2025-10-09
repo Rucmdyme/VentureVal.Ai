@@ -1,19 +1,16 @@
 # routers/agent.py
 from fastapi import APIRouter, HTTPException, Request
-from google import genai
 from google.genai import types
 from typing import List, Dict, Any, Optional
 import logging
 import asyncio
 
-from constants import Collections
 from routers.analysis import fetch_analysis_data
 from models.schemas import ChatRequest, ChatResponse
-from models.database import get_firestore_client
-from utils.ai_client import monitor_usage, configure_gemini
+from utils.ai_client import monitor_usage, get_gemini_client
 from utils.auth_utils import require_user_or_none
 from utils.helpers import match_user_and_analysis_id
-from settings import PROJECT_ID, GCP_REGION
+from settings import GEMINI_MODEL
 from utils.enhanced_text_cleaner import sanitize_for_frontend
 
 
@@ -358,12 +355,7 @@ async def generate_ai_response_with_suggestions(context_prompt: str, question: s
         
         # Use async executor for AI generation
         def _generate_response():
-            configure_gemini()
-            model = genai.Client(
-                vertexai=True,
-                project=PROJECT_ID,
-                location=GCP_REGION
-            )
+            model = get_gemini_client()
             
             # Enhanced prompt with specific instructions for both response and suggestions
             full_prompt = f"""{context_prompt}
@@ -474,7 +466,7 @@ async def generate_ai_response_with_suggestions(context_prompt: str, question: s
             )
             
             response = model.models.generate_content(
-                model="gemini-2.5-flash",
+                model=GEMINI_MODEL,
                 contents=[full_prompt],
                 config=generation_config
             )

@@ -3,9 +3,8 @@ import asyncio
 from typing import Dict, List, Optional, Any
 import json
 import logging
-from google import genai
-from utils.ai_client import configure_gemini
-from settings import PROJECT_ID, GCP_REGION
+from utils.ai_client import get_gemini_client
+from settings import GEMINI_MODEL
 from utils.enhanced_text_cleaner import sanitize_for_frontend
 from utils.helpers import db_insert
 from constants import Collections
@@ -15,9 +14,7 @@ logger = logging.getLogger(__name__)
 class RiskAnalyzer:
     def __init__(self):
         """Initialize risk analyzer with proper API configuration"""
-        
-        # Configure Gemini API
-        configure_gemini()
+        self.model = get_gemini_client()
         
         # Risk category weights for overall scoring
         self.risk_weights = {
@@ -703,14 +700,7 @@ class RiskAnalyzer:
 
             Return only the JSON array with risks specifically related to key metric: {risk_context} and focus area: {focus_area.lower()}.
             """
-            
-            model = genai.Client(
-                vertexai=True,
-                project=PROJECT_ID,
-                location=GCP_REGION
-            )
-            
-            response = await asyncio.to_thread(model.models.generate_content, model="gemini-2.5-flash", contents=[prompt])
+            response = await asyncio.to_thread(self.model.models.generate_content, model=GEMINI_MODEL, contents=[prompt])
 
             if not response or not hasattr(response, 'text') or not response.text:
                 logger.error(f"Empty risk response for {risk_context}")

@@ -1,5 +1,4 @@
 # services/deal_generator.py
-from google import genai
 from google.genai import types
 
 import logging
@@ -8,8 +7,8 @@ from datetime import datetime
 from dataclasses import dataclass
 import asyncio
 from functools import wraps
-from utils.ai_client import configure_gemini
-from settings import PROJECT_ID, GCP_REGION
+from utils.ai_client import get_gemini_client
+from settings import GEMINI_MODEL
 from utils.enhanced_text_cleaner import sanitize_for_frontend
 from constants import Collections
 from utils.helpers import db_insert, db_update
@@ -22,7 +21,7 @@ class DealNoteConfig:
     max_prompt_length: int = 12000
     max_retries: int = 3
     timeout_seconds: int = 60
-    model_name: str = 'gemini-2.5-flash'
+    model_name: str = GEMINI_MODEL
     temperature: float = 0.3
 
 def async_timeout(seconds: int):
@@ -65,13 +64,7 @@ class DealNoteGenerator:
     def _initialize_genai(self):
         """Initialize Google Generative AI with proper error handling"""
         try:
-            configure_gemini()
-            self._model = genai.Client(
-                vertexai=True,
-                project=PROJECT_ID,
-                location=GCP_REGION
-            )
-            
+            self._model = get_gemini_client()
             logger.info("Google Generative AI initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Google Generative AI: {e}")
@@ -426,7 +419,7 @@ class DealNoteGenerator:
 
                 response = await asyncio.get_event_loop().run_in_executor(
                     None, 
-                    lambda: self._model.models.generate_content(model="gemini-2.5-flash",contents = [prompt], config=generation_config)
+                    lambda: self._model.models.generate_content(model=GEMINI_MODEL,contents = [prompt], config=generation_config)
                 )
                 
                 if response and hasattr(response, 'text') and response.text:
