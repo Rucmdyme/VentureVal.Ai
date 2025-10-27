@@ -2,18 +2,19 @@
 
 # main.py - FastAPI Application
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import uvicorn
 import sys
 import os
 from utils.ai_client import cost_monitor
+from exceptions import HandledException
 
 # Add the Backend directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Routers
-from routers import analysis, documents, agent
+from routers import analysis, documents, agent, user_routes
 from models.database import init_firebase
 from utils.ai_client import init_ai_clients
 
@@ -27,6 +28,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+async def _custom_error_handler(request, exc):
+    return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "message": exc.message,
+                "success": False
+            },
+        )
+
+for SubClass in HandledException.__subclasses__():
+    app.add_exception_handler(
+        SubClass, 
+        _custom_error_handler
+    )
+
 
 # Initialize services
 @app.on_event("startup")
@@ -39,6 +55,7 @@ async def startup_event():
 app.include_router(analysis.router, prefix="/analysis", tags=["analysis"])
 app.include_router(documents.router, prefix="/documents", tags=["documents"])
 app.include_router(agent.router, prefix="/agent", tags=["agent"])
+app.include_router(user_routes.router)
 
 @app.get("/")
 async def root():

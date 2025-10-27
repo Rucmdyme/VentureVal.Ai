@@ -2,7 +2,7 @@
 
 # Firebase Firestore Collections (Free Tier Limits):
 # ├── users/                 # User profiles, preferences  
-# ├── analyses/             # Analysis sessions, results
+# ├── analysis/             # Analysis sessions, results
 # ├── documents/            # Document metadata
 # ├── benchmark_data/       # Static benchmark dataset
 # └── weighting_profiles/   # Investor profiles

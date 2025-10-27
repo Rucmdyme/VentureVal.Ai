@@ -25,8 +25,8 @@ steps:
         '--region', 'asia-south1',
         '--platform', 'managed',
         '--allow-unauthenticated',
-        '--set-env-vars=PROJECT_ID=ventureval-ef705,BUCKET_ID=ventureval-ef705.firebasestorage.app,GCP_REGION=asia-south1',
-        '--set-secrets=FIREBASE_CONFIG_JSON=FIREBASE_CONFIG_JSON:latest'
+        '--set-env-vars=PROJECT_ID=ventureval-ef705,BUCKET_ID=ventureval-ef705.firebasestorage.app,GCP_REGION=asia-south1,GEMINI_MODEL=gemini-2.5-flash',
+        '--set-secrets=FIREBASE_CONFIG_JSON=FIREBASE_CONFIG_JSON:latest,API_KEY=API_KEY:latest'
       ]
 
 images:
